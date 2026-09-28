@@ -8,8 +8,7 @@
 <title>三态之水 · Tri-State Water</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=clash-display@500,600&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Geist+Mono:wght@400;500&family=Montserrat:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
 <!--
   三态之水 (Tri-State Water)
   ------------------------------------------------------------
@@ -26,8 +25,10 @@
     --line:rgba(11,14,18,.18);
     --glass:rgba(255,255,255,.42);
     --focus:hsla(212,100%,38%,1);
-    --font: 'Satoshi', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --disp: 'Clash Display', 'Satoshi', system-ui, 'PingFang SC', sans-serif;
+    --font: 'Montserrat', 'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --disp: 'Cormorant Garamond', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --serifCN: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --label: 'Montserrat', 'Noto Serif SC', 'Songti SC', serif;
     --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -44,8 +45,8 @@
     justify-content:space-between; padding:22px 32px; user-select:none; pointer-events:none; }
   #topbar > *{ pointer-events:auto; }
   .brand{ display:flex; align-items:baseline; gap:18px; }
-  .brand b{ font:500 24px/1 var(--mono); letter-spacing:.26em; color:var(--ink); text-shadow:0 1px 14px rgba(255,255,255,.8); }
-  .brand span{ font:400 22px/1 var(--font); letter-spacing:.38em; color:var(--dim); text-shadow:0 1px 12px rgba(255,255,255,.75); }
+  .brand b{ font:500 23px/1 var(--font); letter-spacing:.30em; color:var(--ink); text-shadow:0 1px 14px rgba(255,255,255,.8); }
+  .brand span{ font:300 23px/1 var(--serifCN); letter-spacing:.44em; color:var(--dim); text-shadow:0 1px 12px rgba(255,255,255,.75); }
   .top-right{ display:flex; align-items:center; gap:12px; }
   .pill{ font:500 20px/1 var(--mono); letter-spacing:.05em; color:var(--dim);
     background:var(--glass); border-radius:999px; padding:12px 20px;
@@ -53,7 +54,7 @@
     backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
     font-variant-numeric:tabular-nums; white-space:nowrap; }
   .ghost{ appearance:none; border:0; cursor:pointer;
-    font:500 20px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+    font:500 20px/1 var(--font); letter-spacing:.16em; color:var(--dim);
     background:rgba(255,255,255,.30); border-radius:999px; padding:13px 24px;
     box-shadow:var(--line) 0 0 0 1px;
     backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
@@ -61,30 +62,31 @@
   .ghost:hover{ color:var(--ink); box-shadow:rgba(11,14,18,.42) 0 0 0 1px; }
   .ghost.on{ color:var(--ink); box-shadow:var(--acc) 0 0 0 1.5px; }
 
-  /* —— 左下 hero：超大温度读数（Clash Display） —— */
+  /* —— 左下 hero：超大温度读数（Cormorant Garamond 衬线巨数） —— */
   #hero{ position:fixed; left:40px; bottom:38px; z-index:10; user-select:none; }
   /* 底部浅色衬底：墨字压在亮雾上，暗场景（深水）下依然清晰 */
   #hero::before{ content:''; position:absolute; z-index:-1; left:-88px; bottom:-64px;
     width:1040px; height:700px; pointer-events:none;
     background:radial-gradient(ellipse 100% 100% at 16% 84%,
       rgba(250,252,255,.62) 0%, rgba(250,252,255,.34) 46%, transparent 72%); }
-  #heroPhase{ display:flex; align-items:center; gap:14px; margin-bottom:16px;
-    font:500 21px/1 var(--mono); letter-spacing:.26em; text-transform:uppercase; color:var(--dim);
+  #heroPhase{ display:flex; align-items:center; gap:14px; margin-bottom:18px;
+    font:500 22px/1 var(--label); letter-spacing:.30em; text-transform:uppercase; color:var(--dim);
     text-shadow:0 1px 12px rgba(255,255,255,.85); }
   #heroPhase::before{ content:''; width:9px; height:9px; border-radius:50%; flex:none;
     background:var(--state,var(--acc)); box-shadow:0 0 12px var(--state,var(--acc));
     transition:background .4s ease, box-shadow .4s ease; }
   #tempRead{ display:flex; align-items:flex-start; color:var(--ink);
     text-shadow:0 2px 36px rgba(255,255,255,.65); }
-  #tempRead b{ font:500 clamp(166px, 23vw, 275px)/0.86 var(--disp); letter-spacing:-.02em; }
-  #tempRead .unit{ font:500 clamp(38px, 4.8vw, 58px)/1 var(--disp); color:var(--dim);
-    margin:.28em 0 0 12px; }
+  #tempRead b{ font:400 clamp(166px, 23vw, 275px)/0.86 var(--disp); letter-spacing:-.01em;
+    font-variant-numeric:lining-nums; }
+  #tempRead .unit{ font:400 clamp(38px, 4.8vw, 58px)/1 var(--disp); color:var(--dim);
+    margin:.34em 0 0 14px; }
 
-  /* 状态切换：幽灵文本按钮 + 激活下划线 */
-  #states{ display:flex; gap:44px; margin-top:28px; }
+  /* 状态切换：幽灵文本按钮 + 激活下划线（中文衬线 + 宽字距） */
+  #states{ display:flex; gap:48px; margin-top:28px; }
   .preset{ appearance:none; border:0; background:none; cursor:pointer; padding:6px 0 11px;
-    font:500 24px/1 var(--font); letter-spacing:.14em; color:var(--faint);
-    border-bottom:3px solid transparent; text-shadow:0 1px 10px rgba(255,255,255,.8);
+    font:400 24px/1 var(--label); letter-spacing:.26em; color:var(--faint);
+    border-bottom:2px solid transparent; text-shadow:0 1px 10px rgba(255,255,255,.8);
     transition:color .2s, border-color .3s; }
   .preset:hover{ color:var(--ink); }
   .preset.on{ color:var(--ink); border-bottom-color:var(--acc); }
@@ -127,10 +129,10 @@
     transition:opacity .3s ease, transform .3s cubic-bezier(.5,0,.25,1); }
   #params.open{ opacity:1; transform:none; pointer-events:auto; }
   #params h2{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;
-    font:500 20px/1 var(--font); letter-spacing:.18em; color:var(--faint); text-transform:uppercase; }
+    font:400 21px/1 var(--label); letter-spacing:.24em; color:var(--faint); text-transform:uppercase; }
   #params h2 span{ font:500 16px/1 var(--mono); letter-spacing:.12em; }
   .row{ display:grid; grid-template-columns:58px 1fr 58px; align-items:center; gap:12px;
-    padding:9px 0; font:400 20px/1 var(--font); letter-spacing:.08em; color:var(--dim2); }
+    padding:9px 0; font:400 20px/1 var(--font); letter-spacing:.10em; color:var(--dim2); }
   .row b{ font:500 18px/1 var(--mono); color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; }
   .row select{ appearance:none; grid-column:2/4; background:rgba(255,255,255,.5); color:var(--dim);
     border:0; border-radius:10px; padding:11px 14px; font:500 19px var(--mono); cursor:pointer;
@@ -139,7 +141,7 @@
 
   /* 右下提示 */
   #hint{ position:fixed; right:30px; bottom:28px; z-index:10; text-align:right;
-    font:400 19px/2 var(--mono); letter-spacing:.1em; color:var(--faint);
+    font:400 18px/2.1 var(--font); letter-spacing:.18em; color:var(--faint);
     text-transform:uppercase; user-select:none; pointer-events:none;
     text-shadow:0 1px 9px rgba(255,255,255,.85); }
   #hint kbd{ font:500 16px var(--mono); color:var(--dim); box-shadow:0 0 0 1px var(--line) inset;
@@ -554,6 +556,12 @@ void main(){
   float fog = 1.0 - exp(-dist*0.055);
   col = mix(col, uDeep, fog);
   alpha = mix(alpha, 1.0, fog*0.95);
+  // —— 远缘雾化：水面在网格边界处溶向同方向的背景山色/天际，消除硬水线 ——
+  vec3 D = (vW - uCam)/dist;
+  vec3 bg = mountains(D, skyColor(D, uSun), uSun);
+  float rim = smoothstep(11.0, 19.6, max(abs(vW.x), abs(vW.z)));
+  col = mix(col, bg, rim);
+  alpha = mix(alpha, 1.0, rim);
   outColor = vec4(col, alpha);
 }`;
 
@@ -595,6 +603,11 @@ void main(){
   vec3 T = exp(-sigma*path);
   float dfog = 1.0 - exp(-dist*0.055);
   vec3 col = mix(lit*T + uDeep*(1.0-T), uDeep, dfog);
+  // —— 远缘雾化：海床在水面外缘之外溶向背景山色，避免水线外出现深色带 ——
+  vec3 D = (vW - uCam)/dist;
+  vec3 bg = mountains(D, skyColor(D, uSun), uSun);
+  float rim = smoothstep(16.0, 56.0, max(abs(vW.x), abs(vW.z)));
+  col = mix(col, bg, rim);
   outColor = vec4(col, 1.0);
 }`;
 
