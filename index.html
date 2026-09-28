@@ -319,6 +319,23 @@ float fbm(vec2 p){
   for(int i=0;i<4;i++){ s += a*vnoise(p); p = p*2.03 + vec2(19.7,7.3); a *= 0.5; }
   return s;
 }
+// —— 精度稳健版噪声（山体专用）：小常数哈希，避免大坐标下 fract 精度塌缩成方块 ——
+float hashM(vec2 p){
+  vec3 q = fract(vec3(p.xyx)*0.1031);
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.x + q.y)*q.z);
+}
+float vnoiseM(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  float a = hashM(i), b = hashM(i+vec2(1,0)), c = hashM(i+vec2(0,1)), d = hashM(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbmM(vec2 p){
+  float s = 0.0, a = 0.5;
+  for(int i=0;i<4;i++){ s += a*vnoiseM(p); p = p*2.03 + vec2(19.7,7.3); a *= 0.5; }
+  return s;
+}
 vec3 worley(vec2 p){
   vec2 n = floor(p), f = fract(p);
   float F1 = 8.0, F2 = 8.0, id = 0.0;
@@ -335,7 +352,7 @@ float web(vec2 p){ vec3 w = worley(p); return 1.0 - smoothstep(0.02, 0.16, w.y -
 vec3 skyColor(vec3 rd, vec3 sun){
   float y = max(rd.y, 0.0);
   vec3 zen  = vec3(0.16, 0.42, 0.78);          // 天顶：饱和蓝，不再灰蒙
-  vec3 hor  = vec3(0.78, 0.90, 0.98);          // 地平线：明亮暖白
+  vec3 hor  = vec3(0.70, 0.84, 0.95);          // 地平线：清亮的浅蓝白（衬出雪山剪影）
   vec3 c = mix(hor, zen, pow(y, 0.62));
   // 近地平线的暖色微光（阳光散射）
   c = mix(c, vec3(0.98, 0.94, 0.86), (1.0 - smoothstep(0.0, 0.35, y))*0.28);
@@ -350,7 +367,7 @@ float ridgeAz(float az, float freq, float seed){
   vec2 p = vec2(cos(az), sin(az))*freq + seed*7.31;
   float s = 0.0, a = 0.55;
   for(int i=0;i<5;i++){
-    float n = vnoise(p);
+    float n = vnoiseM(p);
     n = 1.0 - abs(2.0*n - 1.0);
     s += a*n*n;
     p = p*2.13 + vec2(11.3, 5.7);
@@ -358,42 +375,71 @@ float ridgeAz(float az, float freq, float seed){
   }
   return s;
 }
-// 单层山脊：剖面 + 山体内垂直渐变 + 向阳侧微暖 + 脊线羽化 + 大气透视
-vec3 ridgeLayer(float az, float y, float seed, float hBase, float hVar,
-                vec3 colBase, vec3 colTop, float haze, vec3 sky, vec3 sun, vec3 col){
-  float profile = hBase + hVar*ridgeAz(az, 3.4 + seed*0.17, seed);
-  profile += (hBase + hVar)*0.10*sin(az*2.0 + seed*3.7);   // 大尺度起伏分组
-  if(y >= profile) return col;
-  float depth = clamp((profile - y)/max(profile, 1e-3), 0.0, 1.0);
-  // 山体内：顶部接近雾色，基部更深更饱和
-  vec3 rock = mix(colTop, colBase, sqrt(depth));
-  // 向阳侧脊线受光（很轻微的暖）
-  float sunSide = 0.5 + 0.5*cos(az - atan(sun.z, sun.x));
-  rock += vec3(0.09, 0.065, 0.035)*sunSide*pow(1.0 - depth, 2.0)*max(sun.y, 0.0);
-  // 脊线羽化：轻微溶入天空，保留山脊的锐利感
-  float edge = smoothstep(profile, profile - 0.007 - haze*0.007, y);
-  // 大气透视：越远（haze 越大）越溶于天际色
-  rock = mix(sky, rock, 1.0 - haze);
-  return mix(col, rock, edge*(1.0 - haze*0.25));
+// 山体剖面：ridged fbm 山脊 + 大尺度起伏分组
+float mtnProfile(float az, float seed, float hBase, float hVar){
+  float h = hBase + hVar*ridgeAz(az, 3.4 + seed*0.17, seed);
+  h += (hBase + hVar)*0.10*sin(az*2.0 + seed*3.7);
+  return h;
 }
-// 远山：三层山脊，距离越远越淡、越低、越蓝
+// 单层山体：坡度光照 + 谷脊遮蔽 + 顺坡结构 + 雪线斑块 + 大气透视
+vec3 ridgeLayer(float az, float y, float seed, float hBase, float hVar,
+                float haze, float snowLine, vec3 sky, vec3 sun, vec3 col){
+  float h = mtnProfile(az, seed, hBase, hVar);
+  if(y >= h) return col;
+  // —— 剖面采样：坡度定受光面，谷暗脊亮（同一对偏移样本兼算曲率） ——
+  float eps = 0.03;
+  float hL = mtnProfile(az - eps, seed, hBase, hVar);
+  float hR = mtnProfile(az + eps, seed, hBase, hVar);
+  float aspect = clamp((hR - hL)*170.0, -1.0, 1.0);
+  float cav = clamp(((hL + hR)*0.5 - h)*250.0, -1.0, 1.0);     // >0 谷地，<0 脊凸
+  float dAz = atan(sun.z, sun.x) - az;
+  float rel = clamp(y/max(h, 1e-3), 0.0, 1.0);          // 山体内相对海拔：山脚 0 → 脊线 1
+  // —— 顺坡结构：两个频率的坡面纹理（岩层、冲沟、雪檐），随海拔下行 ——
+  float spur = fbmM(vec2(cos(az), sin(az))*8.0 + vec2(0.0, rel*7.0) + seed*3.1);
+  float spur2 = fbmM(vec2(cos(az), sin(az))*17.0 + vec2(rel*13.0, seed*5.7));
+  // 坡度受光叠加坡面纹理，且向山脚渐平（山体下部起伏趋缓），避免竖直帘状条纹
+  float slopeFade = smoothstep(0.04, 0.45, rel);
+  float asp2 = clamp(aspect*0.6 + (spur - 0.5)*1.6, -1.0, 1.0)*slopeFade;
+  float sunFace = -asp2*sin(dAz);
+  float diff = clamp(0.50 + 0.80*sunFace - 0.32*max(cos(dAz), 0.0), 0.0, 1.0);
+  // —— 岩壁 ——
+  vec3 rock = mix(vec3(0.24, 0.29, 0.385), vec3(0.10, 0.13, 0.205), rel*rel*1.3);
+  rock *= 0.84 + 0.32*spur;
+  rock *= 0.88 + 0.24*spur2;
+  // —— 雪：雪线 + 横向雪带斑块 + 缓坡积雪 ——
+  float snowPatch = (fbmM(vec2(cos(az), sin(az))*6.0 + vec2(rel*13.0, seed*2.9)) - 0.5)*0.34;
+  float gentle = (1.0 - abs(aspect)*0.5)*(0.70 + 0.60*spur);   // 积雪随坡向且随坡面纹理断续
+  float snowM = smoothstep(snowLine, snowLine + 0.15, rel + snowPatch + 0.10*gentle*rel);
+  snowM *= smoothstep(0.02, 0.14, rel);                  // 山脚无雪
+  // —— 光照合成：谷地落影、脊凸提亮；雪在阴面吃天空光仍亮但不过曝 ——
+  float amb = 0.30 + 0.24*haze;
+  float shade = amb + 1.10*diff;
+  shade *= 1.0 - 0.22*max(cav, 0.0)*(1.0 - haze)*slopeFade; // 谷地落影（限于坡面）
+  shade *= 1.0 + 0.15*max(-cav, 0.0)*slopeFade;             // 脊凸提亮
+  vec3 rockLit = rock*shade + vec3(1.0, 0.74, 0.46)*max(sunFace, 0.0)*0.07*max(sun.y, 0.0);
+  vec3 snowCol = mix(vec3(0.55, 0.66, 0.85), vec3(1.06, 1.03, 0.99), diff);
+  vec3 snowLit = snowCol*(amb*0.9 + 0.30 + 0.65*diff)*(0.92 + 0.16*spur)
+               + vec3(1.0, 0.80, 0.52)*pow(diff, 3.0)*0.16;
+  vec3 mtn = mix(rockLit, snowLit, snowM);
+  // —— 大气透视：溶向略深的雾色而非亮白天际，保住剪影对比；山脚雾放缓、保留坡面结构 ——
+  vec3 hazeCol = mix(sky, vec3(0.60, 0.70, 0.85), 0.45);
+  float hz2 = clamp(haze + (1.0 - rel)*0.10*haze, 0.0, 0.92);
+  mtn = mix(hazeCol, mtn, 1.0 - hz2);
+  float edge = smoothstep(h, h - 0.004 - haze*0.005, y);
+  return mix(col, mtn, edge);
+}
+// 远山：最远为高大的雪山主脉（浓雾），中近景岩雪相间层层推进
 vec3 mountains(vec3 rd, vec3 sky, vec3 sun){
   float y = rd.y;
-  if(y > 0.35) return sky;
+  if(y > 0.15) return sky;
   float az = atan(rd.z, rd.x);
   vec3 col = sky;
-  // 远层：低而淡，溶于雾中但仍可辨
-  col = ridgeLayer(az, y, 3.1, 0.018, 0.028,
-    vec3(0.44,0.55,0.69), vec3(0.62,0.71,0.83), 0.62, sky, sun, col);
-  // 中层
-  col = ridgeLayer(az, y, 7.7, 0.028, 0.040,
-    vec3(0.28,0.39,0.53), vec3(0.48,0.58,0.72), 0.38, sky, sun, col);
-  // 近层：主山脊，对比最强
-  col = ridgeLayer(az, y, 12.9, 0.036, 0.054,
-    vec3(0.10,0.19,0.31), vec3(0.30,0.41,0.55), 0.16, sky, sun, col);
+  col = ridgeLayer(az, y, 3.1, 0.042, 0.062, 0.55, 0.38, sky, sun, col);   // 远景雪山主脉
+  col = ridgeLayer(az, y, 7.7, 0.032, 0.052, 0.36, 0.48, sky, sun, col);   // 中景岩雪相间
+  col = ridgeLayer(az, y, 12.9, 0.024, 0.058, 0.16, 0.58, sky, sun, col);  // 近景深色岩脊
   // 山脚与水线衔接的雾化
   float hz = 1.0 - smoothstep(0.0, 0.022, y);
-  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.32);
+  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.30);
   return col;
 }`;
 
@@ -842,6 +888,9 @@ const SUN = v3norm([-0.32, 0.42, -0.85]);
 const CAM_POS = [0, 1.65, 7.2];
 const FOV = 55 * Math.PI / 180;
 let yaw = 0, pitch = -0.52;
+// URL 可指定初始机位：?yaw=0.8&pitch=-0.2（便于分享视角与调试截图）
+if (params.has('yaw'))   yaw   = clamp(parseFloat(params.get('yaw'))   || 0,    -1.25, 1.25);
+if (params.has('pitch')) pitch = clamp(parseFloat(params.get('pitch')) || -0.52, -1.15, -0.15);
 let yawV = 0, pitchV = 0;               // 相机角速度（惯性）
 let zoom = 0, zoomV = 0;                // 滚轮缩放（0 近 → 1 远）
 let camPos = CAM_POS.slice();           // 动态相机位置（含 idle 呼吸）
