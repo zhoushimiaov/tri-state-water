@@ -8,7 +8,7 @@
 <title>三态之水 · Tri-State Water</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=clash-display@500,600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!--
   三态之水 (Tri-State Water)
@@ -21,12 +21,13 @@
 -->
 <style>
   :root{
-    --ink:#fffffff2; --dim:#ffffffb3; --dim2:#ffffff8c; --faint:#ffffff59;
-    --surface:#ffffff0d; --surface-hover:#ffffff1a; --line:#ffffff1a;
-    --panel:rgba(15,16,18,.72);
-    --accent:#e8e6e0;
+    --ink:#f0f0fa; --dim:rgba(240,240,250,.66); --dim2:rgba(240,240,250,.55); --faint:rgba(240,240,250,.40);
+    --acc:#63d8c4;
+    --line:rgba(240,240,250,.16);
+    --glass:rgba(8,10,12,.55);
     --focus:hsla(212,100%,48%,1);
-    --font: 'Satoshi', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font: 'Satoshi', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --disp: 'Clash Display', 'Satoshi', system-ui, 'PingFang SC', sans-serif;
     --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -36,72 +37,64 @@
   #gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
 
   :focus{ outline:none; }
-  :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
+  :focus-visible{ outline:2px solid var(--focus); outline-offset:3px; border-radius:4px; }
 
-  /* —— 顶栏：左侧字标，右侧状态胶囊 —— */
+  /* —— 顶栏：字标 + 幽灵按钮（界面隐于画面之上） —— */
   #topbar{ position:fixed; top:0; left:0; right:0; z-index:10; display:flex; align-items:center;
-    justify-content:space-between; padding:14px 18px; user-select:none; pointer-events:none; }
+    justify-content:space-between; padding:16px 20px; user-select:none; pointer-events:none; }
   #topbar > *{ pointer-events:auto; }
-  .brand{ display:flex; align-items:baseline; gap:10px; }
-  .brand b{ font:700 11px/1 var(--mono); letter-spacing:.22em; color:var(--ink); text-shadow:0 1px 8px rgba(0,0,0,.5); }
-  .brand span{ font:400 11px/1 var(--font); letter-spacing:.34em; color:var(--dim2); }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand b{ font:500 12px/1 var(--mono); letter-spacing:.3em; color:var(--ink); text-shadow:0 1px 10px rgba(0,0,0,.5); }
+  .brand span{ font:400 11px/1 var(--font); letter-spacing:.42em; color:var(--dim); }
   .top-right{ display:flex; align-items:center; gap:8px; }
   .pill{ font:500 10.5px/1 var(--mono); letter-spacing:.05em; color:var(--dim);
-    background:var(--panel); border-radius:999px; padding:8px 12px;
+    background:var(--glass); border-radius:999px; padding:8px 12px;
     box-shadow:var(--line) 0 0 0 1px;
-    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
     font-variant-numeric:tabular-nums; white-space:nowrap; }
-  button.pill{ appearance:none; border:0; cursor:pointer; transition:color .18s, box-shadow .18s; }
-  button.pill:hover{ color:var(--ink); box-shadow:#ffffff33 0 0 0 1px; }
+  .ghost{ appearance:none; border:0; cursor:pointer;
+    font:500 10px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
+    background:rgba(240,240,250,.07); border-radius:999px; padding:9px 15px;
+    box-shadow:var(--line) 0 0 0 1px;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    transition:color .2s, box-shadow .2s, background .2s; white-space:nowrap; }
+  .ghost:hover{ color:var(--ink); box-shadow:rgba(240,240,250,.35) 0 0 0 1px; }
+  .ghost.on{ color:var(--ink); box-shadow:var(--acc) 0 0 0 1px; }
 
-  /* —— 右侧控制台（lab console） —— */
-  #side{ position:fixed; top:58px; right:14px; bottom:14px; z-index:10; width:266px;
-    display:flex; flex-direction:column; overflow-y:auto; overscroll-behavior:contain;
-    background:var(--panel); border-radius:16px;
-    box-shadow:var(--line) 0 0 0 1px, rgba(0,0,0,.4) 0 24px 48px -16px;
-    backdrop-filter:blur(24px) saturate(1.15); -webkit-backdrop-filter:blur(24px) saturate(1.15);
-    user-select:none; scrollbar-width:none; }
-  #side::-webkit-scrollbar{ display:none; }
-  #side section{ padding:16px 16px 14px; }
-  #side section + section{ border-top:1px solid #ffffff0f; }
-  #side h2{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:13px;
-    font:500 10px/1 var(--font); letter-spacing:.18em; color:var(--faint); text-transform:uppercase; }
-  #side h2 span{ font:500 8.5px/1 var(--mono); letter-spacing:.14em; opacity:.7; }
+  /* —— 左下 hero：超大温度读数（Clash Display） —— */
+  #hero{ position:fixed; left:30px; bottom:28px; z-index:10; user-select:none; }
+  #heroPhase{ display:flex; align-items:center; gap:9px; margin-bottom:10px;
+    font:500 10px/1 var(--mono); letter-spacing:.3em; text-transform:uppercase; color:var(--dim);
+    text-shadow:0 1px 8px rgba(0,0,0,.5); }
+  #heroPhase::before{ content:''; width:6px; height:6px; border-radius:50%; flex:none;
+    background:var(--state,var(--acc)); box-shadow:0 0 10px var(--state,var(--acc));
+    transition:background .4s ease, box-shadow .4s ease; }
+  #tempRead{ display:flex; align-items:flex-start; color:var(--ink);
+    text-shadow:0 2px 28px rgba(0,0,0,.4); }
+  #tempRead b{ font:500 clamp(104px, 14.5vw, 172px)/0.86 var(--disp); letter-spacing:-.015em; }
+  #tempRead .unit{ font:500 clamp(24px, 3vw, 36px)/1 var(--disp); color:var(--dim);
+    margin:.30em 0 0 8px; }
 
-  /* 状态 chips：三列网格 */
-  .chips{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-  .preset{ appearance:none; border:0; cursor:pointer; border-radius:10px; padding:10px 4px 9px;
-    background:var(--surface); color:var(--dim); text-align:center;
-    font:500 14px/1.2 var(--font);
-    box-shadow:#ffffff0d 0 0 0 1px inset;
-    transition:background .18s, color .18s, box-shadow .18s, transform .16s cubic-bezier(.34,1.56,.64,1); }
-  .preset i{ display:block; font:500 7.5px/1 var(--mono); font-style:normal; letter-spacing:.18em;
-    margin-top:5px; opacity:.55; text-transform:uppercase; }
-  .preset:hover{ background:var(--surface-hover); color:var(--ink); }
-  .preset:active{ transform:scale(.95); }
-  .preset.on{ background:var(--accent); color:#141518; box-shadow:none; }
-  .preset.on i{ opacity:.6; }
+  /* 状态切换：幽灵文本按钮 + 激活下划线 */
+  #states{ display:flex; gap:26px; margin-top:20px; }
+  .preset{ appearance:none; border:0; background:none; cursor:pointer; padding:4px 0 7px;
+    font:500 11px/1 var(--font); letter-spacing:.2em; color:var(--faint);
+    border-bottom:1px solid transparent;
+    transition:color .2s, border-color .3s; }
+  .preset:hover{ color:var(--ink); }
+  .preset.on{ color:var(--ink); border-bottom-color:var(--acc); }
 
-  /* 温度大读数 */
-  #tempRead{ display:flex; align-items:baseline; gap:7px; margin-bottom:12px; }
-  #tempRead b{ font:500 42px/1 var(--mono); letter-spacing:-.03em; color:var(--ink);
-    font-variant-numeric:tabular-nums; }
-  #tempRead .unit{ font:500 15px/1 var(--mono); color:var(--dim2); }
-  #tempRead .phase{ margin-left:auto; display:flex; align-items:center; gap:6px;
-    font:500 10.5px/1 var(--font); letter-spacing:.1em; color:var(--dim); }
-  #tempRead .phase::before{ content:''; width:5px; height:5px; border-radius:50%; flex:none;
-    background:var(--state,#6fd0c0); box-shadow:0 0 7px var(--state,#6fd0c0); }
-
-  /* 滑杆通用：发际线轨道 + 小圆钮 */
+  /* 宽温滑杆 */
+  #sliderWrap{ width:min(600px, 62vw); margin-top:20px; }
   input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:18px;
     background:transparent; cursor:pointer; }
   input[type=range]:focus-visible{ outline-offset:3px; }
-  input[type=range]::-webkit-slider-runnable-track{ height:3px; border-radius:2px; background:#ffffff1f; }
+  input[type=range]::-webkit-slider-runnable-track{ height:3px; border-radius:2px; background:rgba(240,240,250,.16); }
   input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:11px; height:11px; border-radius:50%;
     margin-top:-4px; background:var(--ink); box-shadow:0 0 0 1px rgba(0,0,0,.4); transition:transform .15s ease; }
   input[type=range]:hover::-webkit-slider-thumb{ transform:scale(1.25); }
   input[type=range]:active::-webkit-slider-thumb{ transform:scale(1.4); }
-  input[type=range]::-moz-range-track{ height:3px; border-radius:2px; background:#ffffff1f; }
+  input[type=range]::-moz-range-track{ height:3px; border-radius:2px; background:rgba(240,240,250,.16); }
   input[type=range]::-moz-range-thumb{ width:11px; height:11px; border:0; border-radius:50%;
     background:var(--ink); box-shadow:0 0 0 1px rgba(0,0,0,.4); }
   /* 温度滑杆：渐变轨道，停靠点对齐真实刻度（0°C=19.35%，100°C=73.1%） */
@@ -110,7 +103,8 @@
   #slider::-moz-range-track{
     background:linear-gradient(90deg,#9fcfe8 0%,#a8dde8 19.35%,#57c9b8 19.35%,#57c9b8 73.1%,#e0a06a 90%,#d8845a 100%); }
   #ticks{ position:relative; height:11px; margin-top:2px; color:var(--faint); font-size:8.5px; font-weight:500;
-    letter-spacing:.06em; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+    letter-spacing:.06em; font-family:var(--mono); font-variant-numeric:tabular-nums;
+    text-shadow:0 1px 6px rgba(0,0,0,.5); }
   #ticks span{ position:absolute; transform:translateX(-50%); white-space:nowrap; }
   #ticks span::before{ content:''; position:absolute; left:50%; top:-5px; width:1px; height:2.5px; background:var(--faint); }
   #ticks span:first-child{ left:0; transform:none; }
@@ -118,50 +112,71 @@
   #ticks span:last-child{ right:0; transform:none; }
   #ticks span:last-child::before{ left:auto; right:2px; }
 
-  /* 参数行：标签 + 滑杆 + 数值 */
-  .row{ display:grid; grid-template-columns:34px 1fr 38px; align-items:center; gap:10px;
+  /* 参数抽屉（默认隐藏，顶栏「参数」唤起） */
+  #params{ position:fixed; top:62px; right:16px; z-index:10; width:250px;
+    background:var(--glass); border-radius:14px;
+    box-shadow:var(--line) 0 0 0 1px, rgba(0,0,0,.42) 0 24px 48px -16px;
+    backdrop-filter:blur(24px) saturate(1.15); -webkit-backdrop-filter:blur(24px) saturate(1.15);
+    padding:14px 16px 12px; user-select:none;
+    opacity:0; transform:translateX(14px); pointer-events:none;
+    transition:opacity .3s ease, transform .3s cubic-bezier(.5,0,.25,1); }
+  #params.open{ opacity:1; transform:none; pointer-events:auto; }
+  #params h2{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;
+    font:500 10px/1 var(--font); letter-spacing:.2em; color:var(--faint); text-transform:uppercase; }
+  #params h2 span{ font:500 8.5px/1 var(--mono); letter-spacing:.14em; }
+  .row{ display:grid; grid-template-columns:34px 1fr 36px; align-items:center; gap:10px;
     padding:5px 0; font:400 11px/1 var(--font); letter-spacing:.12em; color:var(--dim2); }
   .row b{ font:500 10px/1 var(--mono); color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; }
-  .row select{ appearance:none; grid-column:2/4; background:var(--surface); color:var(--dim);
+  .row select{ appearance:none; grid-column:2/4; background:rgba(240,240,250,.08); color:var(--dim);
     border:0; border-radius:7px; padding:7px 8px; font:500 10.5px var(--mono); cursor:pointer;
-    box-shadow:#ffffff0d 0 0 0 1px inset; }
+    box-shadow:rgba(240,240,250,.10) 0 0 0 1px inset; }
   .row select:hover{ color:var(--ink); }
 
-  #side footer{ margin-top:auto; padding:12px 16px; border-top:1px solid #ffffff0f;
-    font:400 9.5px/2.1 var(--mono); letter-spacing:.08em; color:var(--faint); }
-  #side kbd{ font:500 8.5px var(--mono); color:var(--dim); box-shadow:0 0 0 1px var(--line) inset;
+  /* 右下提示 */
+  #hint{ position:fixed; right:20px; bottom:22px; z-index:10; text-align:right;
+    font:400 9.5px/2 var(--mono); letter-spacing:.14em; color:var(--faint);
+    text-transform:uppercase; user-select:none; pointer-events:none;
+    text-shadow:0 1px 6px rgba(0,0,0,.5); }
+  #hint kbd{ font:500 8.5px var(--mono); color:var(--dim); box-shadow:0 0 0 1px var(--line) inset;
     border-radius:3px; padding:1px 4px; }
+
+  /* 隐藏态下的恢复按钮（常驻右下角，点击或按 H 恢复） */
+  #showBtn{ position:fixed; right:16px; bottom:16px; z-index:12; display:none; }
+  #showBtn.on{ display:block; }
 
   #fatal{ position:fixed; inset:0; z-index:99; display:none; place-items:center; background:#04141a;
     color:var(--dim); font-size:15px; text-align:center; line-height:2; }
   .hidden{ display:none !important; }
-  #fatal{ position:fixed; inset:0; z-index:99; display:none; place-items:center; background:#04141a; color:var(--dim);
-    font-size:15px; text-align:center; line-height:2; }
-  .hidden{ display:none !important; }
 
   /* —— 入场 —— */
   @keyframes fadeDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:none; } }
-  @keyframes fadeLeft { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:none; } }
-  #topbar{ animation:fadeDown .7s cubic-bezier(.18,.72,.22,1) .2s backwards; }
-  #side{ animation:fadeLeft .8s cubic-bezier(.18,.72,.22,1) .4s backwards; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+  #topbar{ animation:fadeDown .7s cubic-bezier(.18,.72,.22,1) .15s backwards; }
+  #hero{ animation:fadeUp .9s cubic-bezier(.18,.72,.22,1) .35s backwards; }
+  #hint{ animation:fadeUp .8s cubic-bezier(.18,.72,.22,1) .55s backwards; }
 
   /* —— H 键显隐过渡 —— */
-  #topbar, #side{ transition:opacity .4s ease, transform .4s cubic-bezier(.5,0,.25,1); }
+  #topbar, #hero, #hint{ transition:opacity .4s ease, transform .4s cubic-bezier(.5,0,.25,1); }
   .ui-off{ opacity:0 !important; pointer-events:none !important; }
   #topbar.ui-off{ transform:translateY(-12px); }
-  #side.ui-off{ transform:translateX(18px); }
+  #hero.ui-off{ transform:translateY(16px); }
+  #hint.ui-off{ transform:translateY(10px); }
 
-  /* —— 相态切换弹跳 —— */
-  @keyframes pop { 0% { transform:scale(.88); } 55% { transform:scale(1.06); } 100% { transform:scale(1); } }
-  .preset.pop{ animation:pop .38s cubic-bezier(.34,1.56,.64,1); }
-  #tempRead.pop b{ animation:pop .42s cubic-bezier(.34,1.56,.64,1); }
+  /* —— 相态切换弹跳（大读数从左下缘弹起） —— */
+  @keyframes pop { 0% { transform:scale(.96); } 55% { transform:scale(1.03); } 100% { transform:scale(1); } }
+  #tempRead.pop b{ display:inline-block; transform-origin:left bottom; animation:pop .45s cubic-bezier(.34,1.56,.64,1); }
 
-  /* —— 窄屏：控制台变为底部抽屉 —— */
+  /* —— 窄屏 —— */
   @media (max-width:720px){
-    #topbar{ padding:12px 14px; }
-    .brand span{ display:none; }
-    #fps{ display:none; }
-    #side{ top:auto; left:8px; right:8px; bottom:8px; width:auto; max-height:46vh; border-radius:14px; }
+    #topbar{ padding:12px 14px; flex-wrap:wrap; row-gap:8px; }
+    .brand b{ font-size:10px; letter-spacing:.2em; }
+    .brand span, #fps{ display:none; }
+    .ghost{ padding:8px 12px; letter-spacing:.12em; }
+    #hero{ left:18px; bottom:18px; }
+    #sliderWrap{ width:calc(100vw - 36px); }
+    #states{ gap:20px; }
+    #hint{ display:none; }
+    #params{ top:auto; bottom:14px; left:14px; right:14px; width:auto; }
   }
   /* —— 尊重系统的减弱动效偏好 —— */
   @media (prefers-reduced-motion:reduce){
@@ -175,39 +190,39 @@
   <div class="brand"><b>TRI-STATE WATER</b><span>三态之水</span></div>
   <div class="top-right">
     <span class="pill" id="fps">-- fps</span>
-    <span class="pill" id="topTemp">24°C</span>
-    <button class="pill" id="hideBtn" title="隐藏界面（快捷键 H）">隐藏 UI</button>
+    <button class="ghost" id="paramsBtn" title="渲染参数">参数 Params</button>
+    <button class="ghost" id="hideBtn" title="隐藏界面（快捷键 H）">隐藏 Hide</button>
   </div>
 </header>
 
-<aside id="side" aria-label="控制面板">
-  <section>
-    <h2>状态<span>State</span></h2>
-    <div class="chips" role="group" aria-label="相态预设">
-      <button class="preset" data-t="-36" aria-pressed="false" title="凝固态（快捷键 1）">冰<i>Ice</i></button>
-      <button class="preset on" data-t="24" aria-pressed="true" title="液态（快捷键 2）">水<i>Water</i></button>
-      <button class="preset" data-t="130" aria-pressed="false" title="蒸发态（快捷键 3）">汽<i>Steam</i></button>
-    </div>
-  </section>
-  <section>
-    <h2>温度<span>Temp</span></h2>
-    <div id="tempRead" role="status" aria-live="polite"><b>24</b><span class="unit">°C</span><span class="phase">液态 · 水</span></div>
+<div id="hero">
+  <div id="heroPhase">Liquid · 液态 · 水</div>
+  <div id="tempRead" role="status" aria-live="polite"><b>24</b><span class="unit">°C</span></div>
+  <div id="states" role="group" aria-label="相态预设">
+    <button class="preset" data-t="-36" aria-pressed="false" title="凝固态（快捷键 1）">冰 · Ice</button>
+    <button class="preset on" data-t="24" aria-pressed="true" title="液态（快捷键 2）">水 · Water</button>
+    <button class="preset" data-t="130" aria-pressed="false" title="蒸发态（快捷键 3）">汽 · Steam</button>
+  </div>
+  <div id="sliderWrap">
     <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
     <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0° 冰点</span><span style="left:73.1%">100° 沸点</span><span>150°</span></div>
-  </section>
-  <section>
-    <h2>参数<span>Params</span></h2>
-    <label class="row">波幅<input id="waveCtl" type="range" min="0" max="200" step="5" value="100" aria-label="波幅百分比"><b id="waveVal">100%</b></label>
-    <label class="row">缩放<input id="zoomCtl" type="range" min="0" max="100" step="1" value="0" aria-label="缩放"><b id="zoomVal">0%</b></label>
-    <label class="row">画质<select id="qualityCtl" aria-label="画质">
-      <option value="0" selected>自动</option>
-      <option value="1">高</option>
-      <option value="0.7">中</option>
-      <option value="0.45">低</option>
-    </select></label>
-  </section>
-  <footer>拖动 环视 · 点击 涟漪 · 滚轮 缩放<br><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 切换状态 · <kbd>H</kbd> 隐藏界面</footer>
+  </div>
+</div>
+
+<aside id="params" aria-label="渲染参数">
+  <h2>参数<span>Params</span></h2>
+  <label class="row">波幅<input id="waveCtl" type="range" min="0" max="200" step="5" value="100" aria-label="波幅百分比"><b id="waveVal">100%</b></label>
+  <label class="row">缩放<input id="zoomCtl" type="range" min="0" max="100" step="1" value="0" aria-label="缩放"><b id="zoomVal">0%</b></label>
+  <label class="row">画质<select id="qualityCtl" aria-label="画质">
+    <option value="0" selected>自动</option>
+    <option value="1">高</option>
+    <option value="0.7">中</option>
+    <option value="0.45">低</option>
+  </select></label>
 </aside>
+
+<div id="hint">拖动 环视 · 点击 涟漪 · 滚轮 缩放<br><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 状态 · <kbd>H</kbd> 隐藏界面</div>
+<button class="ghost" id="showBtn">显示 UI · H</button>
 <div id="fatal"><div>此演示需要支持 <b>WebGL2</b> 的浏览器。<br>请使用较新的 Chrome / Edge / Firefox / Safari 打开。</div></div>
 
 <script>
@@ -235,8 +250,9 @@ canvas.addEventListener('webglcontextrestored', () => location.reload());
 
 // —— UI 元素引用（提前到 URL 预置之前） ——
 const slider = $('#slider');
-const tempRead = $('#tempRead'), tempNum = tempRead.querySelector('b'), phaseEl = tempRead.querySelector('.phase');
-const topTemp = $('#topTemp');
+const hero = $('#hero');
+const tempRead = $('#tempRead'), tempNum = tempRead.querySelector('b');
+const phaseEl = $('#heroPhase');
 const zoomCtl = $('#zoomCtl'), zoomVal = $('#zoomVal');
 const presetBtns = [...document.querySelectorAll('.preset')];
 function markPresets(near) {
@@ -844,7 +860,7 @@ let lastActive = 0;                     // 上次交互的 simTime
     slider.value = targetTemp;
     markPresets(targetTemp);
   }
-  if (params.get('ui') === '0') ['side', 'topbar'].forEach(id => $('#' + id).classList.add('hidden'));
+  if (params.get('ui') === '0') ['topbar', 'hero', 'hint', 'params'].forEach(id => $('#' + id).classList.add('hidden'));
 }
 
 // 涟漪槽
@@ -949,8 +965,21 @@ function setTemp(t, fromPreset) {
     markPresets(NaN);   // 自由温度：不高亮任何预设（updateUI 会按最近预设回标）
   }
 }
-function toggleUI() { ['side', 'topbar'].forEach(id => $('#' + id).classList.toggle('ui-off')); }
+// —— 显隐：H / 隐藏按钮；隐藏时右下角常驻「显示 UI」幽灵按钮保证可恢复 ——
+let uiHidden = false;
+function toggleUI() {
+  uiHidden = !uiHidden;
+  ['topbar', 'hero', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off', uiHidden));
+  if (uiHidden) { $('#params').classList.remove('open'); $('#paramsBtn').classList.remove('on'); }
+  $('#showBtn').classList.toggle('on', uiHidden);
+}
 $('#hideBtn').addEventListener('click', toggleUI);
+$('#showBtn').addEventListener('click', toggleUI);
+$('#paramsBtn').addEventListener('click', () => {
+  const p = $('#params');
+  p.classList.toggle('open');
+  $('#paramsBtn').classList.toggle('on', p.classList.contains('open'));
+});
 window.addEventListener('keydown', e => {
   if (e.key === '1') setTemp(-36, true);
   if (e.key === '2') setTemp(24, true);
@@ -978,18 +1007,17 @@ $('#qualityCtl').addEventListener('change', e => {
 let lastBadge = '', lastPhase = '', lastNear = null;
 function updateUI() {
   const t = dispTemp, p = P;
-  let name, color;
-  if (p.ice > 0.85) { name = '凝固态 · 冰'; color = '#a8d4ee'; }
-  else if (p.ice > 0.05) { name = '正在结冰…'; color = '#c3dcec'; }
-  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; color = '#e8b088'; }
-  else if (p.steam > 0.05) { name = '正在沸腾…'; color = '#ecc9a8'; }
-  else { name = '液态 · 水'; color = '#6fd0c0'; }
+  let name, en, color;
+  if (p.ice > 0.85) { name = '凝固态 · 冰'; en = 'Solid'; color = '#a8d4ee'; }
+  else if (p.ice > 0.05) { name = '正在结冰…'; en = 'Freezing'; color = '#c3dcec'; }
+  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; en = 'Vapor'; color = '#e8b088'; }
+  else if (p.steam > 0.05) { name = '正在沸腾…'; en = 'Boiling'; color = '#ecc9a8'; }
+  else { name = '液态 · 水'; en = 'Liquid'; color = '#63d8c4'; }
   const deg = Math.round(t);
   if (deg + name !== lastBadge) {
     tempNum.textContent = deg;
-    phaseEl.textContent = name;
-    tempRead.style.setProperty('--state', color);
-    topTemp.textContent = deg + '°C';
+    phaseEl.textContent = en + ' · ' + name;
+    hero.style.setProperty('--state', color);
     lastBadge = deg + name;
   }
   // 仅在相态名称变化时弹跳读数，拖动滑杆不再每帧 pop
