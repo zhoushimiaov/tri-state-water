@@ -8,7 +8,7 @@
 <title>三态之水 · Tri-State Water</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!--
   三态之水 (Tri-State Water)
   ------------------------------------------------------------
@@ -20,11 +20,12 @@
 -->
 <style>
   :root{
-    --ink:#fafafa; --dim:#a3b1b8; --ink-deep:#171717;
-    --glass:rgba(10,12,14,.60); --line:rgba(255,255,255,.10);
+    --ink:#f5f4f0; --dim:#93a0a8; --ink-deep:#101314;
+    --glass:rgba(8,10,12,.42); --line:rgba(255,255,255,.10);
     --focus:hsla(212,100%,48%,1);
     --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --serif: 'Fraunces', 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', serif;
   }
   *{ box-sizing:border-box; margin:0; padding:0; }
   html,body{ width:100%; height:100%; overflow:hidden; background:#04141a;
@@ -36,78 +37,89 @@
   :focus{ outline:none; }
   :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
 
-  #title{ position:fixed; top:18px; left:22px; color:var(--ink); z-index:10; user-select:none;
-    text-shadow:0 1px 12px rgba(0,0,0,.6); pointer-events:none; }
-  #title b{ font-size:24px; font-weight:600; letter-spacing:-0.96px; }
-  #title span{ display:block; font-size:12px; font-weight:500; color:var(--dim); letter-spacing:.22em; margin-top:5px;
-    font-family:var(--mono); text-transform:uppercase; }
+  /* —— 标题：衬线编辑排版（杂志感） —— */
+  #title{ position:fixed; top:24px; left:26px; color:var(--ink); z-index:10; user-select:none;
+    text-shadow:0 1px 12px rgba(0,0,0,.45); pointer-events:none; }
+  #title b{ display:block; font-family:var(--serif); font-optical-sizing:auto;
+    font-size:30px; font-weight:300; letter-spacing:0.01em; line-height:1.1; }
+  #title .cn{ display:block; font-family:var(--serif); font-size:13px; font-weight:400;
+    color:var(--dim); letter-spacing:.62em; margin-top:7px; }
+  #title .en{ display:block; font-family:var(--mono); font-size:9px; font-weight:500;
+    color:var(--dim); opacity:.62; letter-spacing:.26em; margin-top:8px; text-transform:uppercase; }
 
-  #hint{ position:fixed; top:20px; right:22px; z-index:10; color:var(--dim); font-size:13px; font-weight:400; line-height:2.0;
-    text-align:right; text-shadow:0 1px 8px rgba(0,0,0,.7); user-select:none; pointer-events:none; }
-  #hint kbd{ font:500 11px var(--mono); color:var(--ink); box-shadow:0 0 0 1px var(--line) inset; border-radius:4px; padding:1px 5px; }
+  /* —— 提示：mono 微型大写标签 —— */
+  #hint{ position:fixed; top:26px; right:26px; z-index:10; color:var(--dim);
+    font-family:var(--mono); font-size:9.5px; font-weight:500; letter-spacing:.16em;
+    line-height:2.3; text-align:right; text-transform:uppercase;
+    text-shadow:0 1px 8px rgba(0,0,0,.6); user-select:none; pointer-events:none; opacity:.85; }
+  #hint kbd{ font:500 9px var(--mono); color:var(--ink); letter-spacing:0;
+    box-shadow:0 0 0 1px var(--line) inset; border-radius:3px; padding:1px 4px; }
 
-  /* —— 控制面板：深色玻璃 + 多层 shadow 堆叠（shadow-as-border 体系） —— */
-  #panel{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:10;
-    display:flex; align-items:center; gap:14px; padding:12px 16px;
+  /* —— 控制面板：悬浮胶囊条，细玻璃 + 发际线描边 —— */
+  #panel{ position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:10;
+    display:flex; align-items:center; gap:10px; padding:8px 10px;
     width:max-content; max-width:calc(100vw - 24px);
-    background:var(--glass); border-radius:12px;
+    background:var(--glass); border-radius:999px;
     box-shadow:
-      rgba(255,255,255,0.10) 0px 0px 0px 1px,
-      rgba(255,255,255,0.05) 0px 0px 0px 1px inset,
-      rgba(0,0,0,0.32) 0px 4px 12px,
-      rgba(0,0,0,0.42) 0px 16px 32px -12px;
-    backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15);
+      rgba(255,255,255,0.12) 0px 0px 0px 1px,
+      rgba(255,255,255,0.07) 0px 1px 0px inset,
+      rgba(0,0,0,0.35) 0px 8px 24px -4px,
+      rgba(0,0,0,0.45) 0px 24px 48px -16px;
+    backdrop-filter:blur(24px) saturate(1.2); -webkit-backdrop-filter:blur(24px) saturate(1.2);
     user-select:none; }
-  .preset{ appearance:none; border:0; background:rgba(255,255,255,.06); color:var(--ink);
-    font:500 14px/1.43 var(--font); padding:8px 14px; border-radius:6px; cursor:pointer; white-space:nowrap;
-    box-shadow:rgba(255,255,255,0.10) 0px 0px 0px 1px;
-    transition:transform .16s cubic-bezier(.34,1.56,.64,1), background .18s ease, color .18s ease, box-shadow .25s ease; }
-  .preset:hover{ background:rgba(255,255,255,.14); transform:translateY(-1px); }
-  .preset:active{ transform:translateY(1px) scale(.94); }
-  .preset.on{ background:var(--ink); color:var(--ink-deep);
-    box-shadow:rgba(255,255,255,0.9) 0px 0px 0px 1px, rgba(255,255,255,0.22) 0px 0px 18px; }
+  #panel .sep{ width:1px; height:18px; background:rgba(255,255,255,.10); flex:none; }
 
-  #sliderWrap{ display:flex; flex-direction:column; gap:6px; width:min(320px,38vw); }
-  /* 加大命中区（20px），轨道本身仍是 5px */
+  /* 预设：去 emoji，单字 + 宽字距，激活态为实心白丸 */
+  .preset{ appearance:none; border:0; background:transparent; color:var(--dim);
+    font:500 13px/1 var(--font); letter-spacing:.3em; padding:10px 15px 10px 19px;
+    border-radius:999px; cursor:pointer; white-space:nowrap;
+    transition:color .2s ease, background .2s ease, transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease; }
+  .preset:hover{ color:var(--ink); background:rgba(255,255,255,.08); }
+  .preset:active{ transform:scale(.94); }
+  .preset.on{ background:var(--ink); color:var(--ink-deep);
+    box-shadow:rgba(255,255,255,0.85) 0px 0px 0px 1px, rgba(255,255,255,0.20) 0px 0px 16px; }
+
+  #sliderWrap{ display:flex; flex-direction:column; gap:6px; width:min(300px,34vw); }
+  /* 发际线轨道（3px），命中区仍为 20px */
   #slider{ -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
   #slider:focus-visible{ outline-offset:4px; }
   /* 渐变停靠点与真实温度刻度对齐：0°C = 19.35%，100°C = 73.1% */
-  #slider::-webkit-slider-runnable-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5.5px;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
+  #slider::-webkit-slider-runnable-track{ height:3px; border-radius:2px;
+    background:linear-gradient(90deg,#9fcfe8 0%,#a8dde8 19.35%,#57c9b8 19.35%,#57c9b8 73.1%,#e0a06a 90%,#d8845a 100%); }
+  #slider::-webkit-slider-thumb{ -webkit-appearance:none; width:11px; height:11px; border-radius:50%; margin-top:-4px;
+    background:var(--ink); box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 1px 4px rgba(0,0,0,.45);
     transition:transform .15s ease; }
-  #slider:hover::-webkit-slider-thumb{ transform:scale(1.12); }
-  #slider:active::-webkit-slider-thumb{ transform:scale(1.28); }
-  #slider::-moz-range-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; border:none;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
+  #slider:hover::-webkit-slider-thumb{ transform:scale(1.25); }
+  #slider:active::-webkit-slider-thumb{ transform:scale(1.45); }
+  #slider::-moz-range-track{ height:3px; border-radius:2px;
+    background:linear-gradient(90deg,#9fcfe8 0%,#a8dde8 19.35%,#57c9b8 19.35%,#57c9b8 73.1%,#e0a06a 90%,#d8845a 100%); }
+  #slider::-moz-range-thumb{ width:11px; height:11px; border-radius:50%; border:none;
+    background:var(--ink); box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 1px 4px rgba(0,0,0,.45);
     transition:transform .15s ease; }
-  #slider:hover::-moz-range-thumb{ transform:scale(1.12); }
-  #slider:active::-moz-range-thumb{ transform:scale(1.28); }
-  /* 刻度标签按真实温度位置绝对定位，带小刻度线 */
-  #ticks{ position:relative; height:12px; color:var(--dim); font-size:10px; font-weight:500; letter-spacing:.02em;
-    font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  #slider:hover::-moz-range-thumb{ transform:scale(1.25); }
+  #slider:active::-moz-range-thumb{ transform:scale(1.45); }
+  /* 刻度：按真实温度位置定位的 mono 微型标签 */
+  #ticks{ position:relative; height:11px; color:var(--dim); font-size:8.5px; font-weight:500; letter-spacing:.08em;
+    font-family:var(--mono); font-variant-numeric:tabular-nums; opacity:.8; }
   #ticks span{ position:absolute; transform:translateX(-50%); white-space:nowrap; }
-  #ticks span::before{ content:''; position:absolute; left:50%; top:-6px; width:1px; height:3px;
-    background:var(--dim); opacity:.55; }
+  #ticks span::before{ content:''; position:absolute; left:50%; top:-5px; width:1px; height:2.5px;
+    background:var(--dim); opacity:.5; }
   #ticks span:first-child{ left:0; transform:none; }
-  #ticks span:first-child::before{ left:3px; }
+  #ticks span:first-child::before{ left:2px; }
   #ticks span:last-child{ right:0; transform:none; }
-  #ticks span:last-child::before{ left:auto; right:3px; }
+  #ticks span:last-child::before{ left:auto; right:2px; }
 
-  /* 状态徽章：pill + 状态色圆点（色值经 --state 由 JS 驱动） */
-  #badge{ --state:#5fe8cf; display:flex; align-items:center; justify-content:center; gap:8px;
-    min-width:150px; font:500 13px/1 var(--font); color:var(--ink);
-    border-radius:9999px; padding:9px 14px; background:rgba(255,255,255,.05);
-    box-shadow:rgba(255,255,255,0.08) 0px 0px 0px 1px;
+  /* 状态徽章：描边丸 + 状态色圆点 + 宽字距相态 */
+  #badge{ --state:#5fd8c8; display:flex; align-items:center; justify-content:center; gap:7px;
+    font:500 12px/1 var(--font); color:var(--ink);
+    border-radius:999px; padding:9px 14px; background:transparent;
+    box-shadow:rgba(255,255,255,0.12) 0px 0px 0px 1px inset;
     transition:box-shadow .4s ease; white-space:nowrap; }
-  #badge i{ width:7px; height:7px; border-radius:50%; background:var(--state);
-    box-shadow:0 0 8px var(--state); transition:background .4s ease, box-shadow .4s ease; }
-  #badge b{ font:600 13px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--state);
+  #badge i{ width:5px; height:5px; border-radius:50%; background:var(--state);
+    box-shadow:0 0 7px var(--state); transition:background .4s ease, box-shadow .4s ease; }
+  #badge b{ font:500 12px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--state);
     transition:color .4s ease; }
-  #badge span{ color:var(--ink); opacity:.85; }
+  #badge span{ color:var(--ink); opacity:.8; font-size:11px; letter-spacing:.22em; }
 
   #fps{ position:fixed; right:14px; bottom:14px; z-index:11; color:var(--dim); font-size:11px; display:none;
     font-family:var(--mono); font-variant-numeric:tabular-nums; }
@@ -138,9 +150,11 @@
   /* —— 窄屏：面板换行，滑杆独占一行 —— */
   @media (max-width:640px){
     #hint{ display:none; }
-    #panel{ flex-wrap:wrap; justify-content:center; gap:8px 10px; padding:10px 12px; bottom:12px; }
-    #sliderWrap{ order:5; width:100%; }
-    #badge{ min-width:0; padding:8px 12px; }
+    #title{ top:18px; left:20px; }
+    #title b{ font-size:24px; }
+    #panel{ flex-wrap:wrap; justify-content:center; gap:6px 8px; padding:8px 10px; bottom:14px; border-radius:22px; }
+    #panel .sep{ display:none; }
+    #sliderWrap{ order:5; width:100%; padding:0 6px; }
   }
   /* —— 尊重系统的减弱动效偏好 —— */
   @media (prefers-reduced-motion:reduce){
@@ -150,17 +164,19 @@
 <body>
 <canvas id="gl"></canvas>
 
-<div id="title"><b>Tri-State Water</b><span>三态之水 · WebGL2</span></div>
+<div id="title"><b>Tri-State Water</b><span class="cn">三态之水</span><span class="en">WebGL2 · Real-time</span></div>
 <div id="hint">拖动 环视 · 滚轮 缩放<br>点击水面 荡开涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换状态 &nbsp;<kbd>H</kbd> 隐藏面板</div>
 
 <div id="panel" role="group" aria-label="温度控制">
-  <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">❄️ 冰</button>
-  <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">💧 水</button>
-  <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">♨️ 汽</button>
+  <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">冰</button>
+  <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">水</button>
+  <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">汽</button>
+  <span class="sep"></span>
   <div id="sliderWrap">
     <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
     <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0°C 冰点</span><span style="left:73.1%">100°C 沸点</span><span>150°</span></div>
   </div>
+  <span class="sep"></span>
   <div id="badge" role="status" aria-live="polite"><i></i><b>24°C</b><span>液态 · 水</span></div>
 </div>
 <div id="fps"></div>
@@ -278,32 +294,56 @@ vec3 skyColor(vec3 rd, vec3 sun){
   c += vec3(1.0,0.90,0.72)*pow(sd,320.0)*5.0;
   return c;
 }
-// 远山：两层山脊剪影（大气透视，越远越淡）
-vec3 mountains(vec3 rd, vec3 sky){
+// 山脊噪声：ridged fbm（1-|2n-1| 的平方），产生尖锐山脊线而非圆丘；
+// 采样在方位角的单位圆上进行，环视 360° 无接缝
+float ridgeAz(float az, float freq, float seed){
+  vec2 p = vec2(cos(az), sin(az))*freq + seed*7.31;
+  float s = 0.0, a = 0.55;
+  for(int i=0;i<5;i++){
+    float n = vnoise(p);
+    n = 1.0 - abs(2.0*n - 1.0);
+    s += a*n*n;
+    p = p*2.13 + vec2(11.3, 5.7);
+    a *= 0.52;
+  }
+  return s;
+}
+// 单层山脊：剖面 + 山体内垂直渐变 + 向阳侧微暖 + 脊线羽化 + 大气透视
+vec3 ridgeLayer(float az, float y, float seed, float hBase, float hVar,
+                vec3 colBase, vec3 colTop, float haze, vec3 sky, vec3 sun, vec3 col){
+  float profile = hBase + hVar*ridgeAz(az, 3.4 + seed*0.17, seed);
+  profile += (hBase + hVar)*0.10*sin(az*2.0 + seed*3.7);   // 大尺度起伏分组
+  if(y >= profile) return col;
+  float depth = clamp((profile - y)/max(profile, 1e-3), 0.0, 1.0);
+  // 山体内：顶部接近雾色，基部更深更饱和
+  vec3 rock = mix(colTop, colBase, sqrt(depth));
+  // 向阳侧脊线受光（很轻微的暖）
+  float sunSide = 0.5 + 0.5*cos(az - atan(sun.z, sun.x));
+  rock += vec3(0.09, 0.065, 0.035)*sunSide*pow(1.0 - depth, 2.0)*max(sun.y, 0.0);
+  // 脊线羽化：轻微溶入天空，保留山脊的锐利感
+  float edge = smoothstep(profile, profile - 0.007 - haze*0.007, y);
+  // 大气透视：越远（haze 越大）越溶于天际色
+  rock = mix(sky, rock, 1.0 - haze);
+  return mix(col, rock, edge*(1.0 - haze*0.25));
+}
+// 远山：三层山脊，距离越远越淡、越低、越蓝
+vec3 mountains(vec3 rd, vec3 sky, vec3 sun){
   float y = rd.y;
-  if(y > 0.3) return sky;
-  // 山脊高度用径向角度采样，保证环视连续
+  if(y > 0.35) return sky;
   float az = atan(rd.z, rd.x);
-  // 远层：低缓，约 1200m 外，被大气推成蓝白
-  float r1 = 0.055*fbm(vec2(az*2.6, 0.0)) + 0.028*fbm(vec2(az*7.1, 4.7))
-           + 0.014*sin(az*3.0 + 1.7);
-  // 近层：更高峻，约 600m 外
-  float r2 = 0.085*fbm(vec2(az*2.1 + 9.3, 0.0)) + 0.042*fbm(vec2(az*5.7 + 3.1, 8.2))
-           + 0.020*sin(az*2.2 + 5.2);
   vec3 col = sky;
-  if(y < r1){                                    // 远山：雾蓝
-    float depth = smoothstep(r1, r1 - 0.02, y);
-    vec3 mc = mix(vec3(0.52, 0.66, 0.82), vec3(0.30, 0.44, 0.62), smoothstep(0.0, 0.06, y));
-    col = mix(col, mc, depth*0.85);
-  }
-  if(y < r2){                                    // 近山：深青蓝
-    float depth = smoothstep(r2, r2 - 0.025, y);
-    vec3 mc = mix(vec3(0.30, 0.42, 0.56), vec3(0.13, 0.22, 0.34), smoothstep(0.0, 0.08, y));
-    col = mix(col, mc, depth*0.94);
-  }
+  // 远层：低而淡，溶于雾中但仍可辨
+  col = ridgeLayer(az, y, 3.1, 0.018, 0.028,
+    vec3(0.44,0.55,0.69), vec3(0.62,0.71,0.83), 0.62, sky, sun, col);
+  // 中层
+  col = ridgeLayer(az, y, 7.7, 0.028, 0.040,
+    vec3(0.28,0.39,0.53), vec3(0.48,0.58,0.72), 0.38, sky, sun, col);
+  // 近层：主山脊，对比最强
+  col = ridgeLayer(az, y, 12.9, 0.036, 0.054,
+    vec3(0.10,0.19,0.31), vec3(0.30,0.41,0.55), 0.16, sky, sun, col);
   // 山脚与水线衔接的雾化
-  float hz = 1.0 - smoothstep(0.0, 0.02, y);
-  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.35);
+  float hz = 1.0 - smoothstep(0.0, 0.022, y);
+  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.32);
   return col;
 }`;
 
@@ -382,7 +422,7 @@ void main(){
   float F = 0.02 + 0.98*pow(1.0-NdV, 5.0);
   vec3 R = reflect(-V, N);
   R.y = abs(R.y)*0.98 + 0.02;
-  vec3 refl = mountains(R, skyColor(R, uSun));
+  vec3 refl = mountains(R, skyColor(R, uSun), uSun);
   float cosSun = max(dot(R, uSun), 0.0);
   float spec = pow(cosSun, 720.0)*3.5 + pow(cosSun, 64.0)*0.18;
   float crest = clamp(vH*1.6 + 0.45, 0.0, 1.0);
@@ -476,7 +516,7 @@ ${NOISE}
 void main(){
   vec3 rd = normalize(uCamF + uCamR*vNdc.x*uTanF*uAspect + uCamU*vNdc.y*uTanF);
   vec3 c = skyColor(rd, uSun);
-  c = mountains(rd, c);
+  c = mountains(rd, c, uSun);
   if(rd.y > 0.015){
     vec2 cp = rd.xz/(rd.y + 0.18);
     float cl = fbm(cp*0.7 + vec2(uTime*0.008, 0.0));
@@ -891,11 +931,11 @@ let lastBadge = '', lastPhase = '', lastNear = null;
 function updateUI() {
   const t = dispTemp, p = P;
   let name, color;
-  if (p.ice > 0.85) { name = '凝固态 · 冰'; color = '#9adcff'; }
-  else if (p.ice > 0.05) { name = '正在结冰…'; color = '#bfe8ff'; }
-  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; color = '#ffb36b'; }
-  else if (p.steam > 0.05) { name = '正在沸腾…'; color = '#ffd39b'; }
-  else { name = '液态 · 水'; color = '#5fe8cf'; }
+  if (p.ice > 0.85) { name = '凝固态 · 冰'; color = '#a8d4ee'; }
+  else if (p.ice > 0.05) { name = '正在结冰…'; color = '#c3dcec'; }
+  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; color = '#e8b088'; }
+  else if (p.steam > 0.05) { name = '正在沸腾…'; color = '#ecc9a8'; }
+  else { name = '液态 · 水'; color = '#6fd0c0'; }
   const deg = Math.round(t) + '°C';
   if (deg + name !== lastBadge) {
     badgeT.textContent = deg;
