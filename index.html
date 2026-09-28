@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="theme-color" content="#04141a">
+<meta name="description" content="三态之水 Tri-State Water —— 单文件零依赖的 WebGL2 实时水场景，温度驱动冰 / 水 / 汽三态连续相变。">
+<title>三态之水 · Tri-State Water</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  三态之水 (Tri-State Water)
+  ------------------------------------------------------------
+  视觉与技术路线复刻自开源项目 clearwater (github.com/Aureliengmz/clearwater, MIT)
+  —— 浅水碧波 + 水底焦散 + 太阳眩光 + 交互涟漪 的实时 WebGL2 场景。
+  本文件为从零手写的独立实现，并新增“温度三态”系统：
+    凝固态(冰) / 液态(水) / 蒸发态(汽)，由温度滑杆连续驱动。
+  无依赖 · 无构建 · 单文件。直接用浏览器打开即可。
+-->
+<style>
+  :root{
+    --ink:#fafafa; --dim:#a3b1b8; --ink-deep:#171717;
+    --glass:rgba(10,12,14,.60); --line:rgba(255,255,255,.10);
+    --focus:hsla(212,100%,48%,1);
+    --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#04141a;
+    font-family:var(--font); font-feature-settings:'liga';
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+  #gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
+
+  /* 键盘可访问性：统一焦点环（Vercel focus blue） */
+  :focus{ outline:none; }
+  :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
+
+  #title{ position:fixed; top:18px; left:22px; color:var(--ink); z-index:10; user-select:none;
+    text-shadow:0 1px 12px rgba(0,0,0,.6); pointer-events:none; }
+  #title b{ font-size:24px; font-weight:600; letter-spacing:-0.96px; }
+  #title span{ display:block; font-size:12px; font-weight:500; color:var(--dim); letter-spacing:.22em; margin-top:5px;
+    font-family:var(--mono); text-transform:uppercase; }
+
+  #hint{ position:fixed; top:20px; right:22px; z-index:10; color:var(--dim); font-size:13px; font-weight:400; line-height:2.0;
+    text-align:right; text-shadow:0 1px 8px rgba(0,0,0,.7); user-select:none; pointer-events:none; }
+  #hint kbd{ font:500 11px var(--mono); color:var(--ink); box-shadow:0 0 0 1px var(--line) inset; border-radius:4px; padding:1px 5px; }
+
+  /* —— 控制面板：深色玻璃 + 多层 shadow 堆叠（shadow-as-border 体系） —— */
+  #panel{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:10;
+    display:flex; align-items:center; gap:14px; padding:12px 16px;
+    width:max-content; max-width:calc(100vw - 24px);
+    background:var(--glass); border-radius:12px;
+    box-shadow:
+      rgba(255,255,255,0.10) 0px 0px 0px 1px,
+      rgba(255,255,255,0.05) 0px 0px 0px 1px inset,
+      rgba(0,0,0,0.32) 0px 4px 12px,
+      rgba(0,0,0,0.42) 0px 16px 32px -12px;
+    backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15);
+    user-select:none; }
+  .preset{ appearance:none; border:0; background:rgba(255,255,255,.06); color:var(--ink);
+    font:500 14px/1.43 var(--font); padding:8px 14px; border-radius:6px; cursor:pointer; white-space:nowrap;
+    box-shadow:rgba(255,255,255,0.10) 0px 0px 0px 1px;
+    transition:transform .16s cubic-bezier(.34,1.56,.64,1), background .18s ease, color .18s ease, box-shadow .25s ease; }
+  .preset:hover{ background:rgba(255,255,255,.14); transform:translateY(-1px); }
+  .preset:active{ transform:translateY(1px) scale(.94); }
+  .preset.on{ background:var(--ink); color:var(--ink-deep);
+    box-shadow:rgba(255,255,255,0.9) 0px 0px 0px 1px, rgba(255,255,255,0.22) 0px 0px 18px; }
+
+  #sliderWrap{ display:flex; flex-direction:column; gap:6px; width:min(320px,38vw); }
+  /* 加大命中区（20px），轨道本身仍是 5px */
+  #slider{ -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
+  #slider:focus-visible{ outline-offset:4px; }
+  /* 渐变停靠点与真实温度刻度对齐：0°C = 19.35%，100°C = 73.1% */
+  #slider::-webkit-slider-runnable-track{ height:5px; border-radius:3px;
+    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
+  #slider::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5.5px;
+    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
+    transition:transform .15s ease; }
+  #slider:hover::-webkit-slider-thumb{ transform:scale(1.12); }
+  #slider:active::-webkit-slider-thumb{ transform:scale(1.28); }
+  #slider::-moz-range-track{ height:5px; border-radius:3px;
+    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
+  #slider::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; border:none;
+    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
+    transition:transform .15s ease; }
+  #slider:hover::-moz-range-thumb{ transform:scale(1.12); }
+  #slider:active::-moz-range-thumb{ transform:scale(1.28); }
+  /* 刻度标签按真实温度位置绝对定位，带小刻度线 */
+  #ticks{ position:relative; height:12px; color:var(--dim); font-size:10px; font-weight:500; letter-spacing:.02em;
+    font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  #ticks span{ position:absolute; transform:translateX(-50%); white-space:nowrap; }
+  #ticks span::before{ content:''; position:absolute; left:50%; top:-6px; width:1px; height:3px;
+    background:var(--dim); opacity:.55; }
+  #ticks span:first-child{ left:0; transform:none; }
+  #ticks span:first-child::before{ left:3px; }
+  #ticks span:last-child{ right:0; transform:none; }
+  #ticks span:last-child::before{ left:auto; right:3px; }
+
+  /* 状态徽章：pill + 状态色圆点（色值经 --state 由 JS 驱动） */
+  #badge{ --state:#5fe8cf; display:flex; align-items:center; justify-content:center; gap:8px;
+    min-width:150px; font:500 13px/1 var(--font); color:var(--ink);
+    border-radius:9999px; padding:9px 14px; background:rgba(255,255,255,.05);
+    box-shadow:rgba(255,255,255,0.08) 0px 0px 0px 1px;
+    transition:box-shadow .4s ease; white-space:nowrap; }
+  #badge i{ width:7px; height:7px; border-radius:50%; background:var(--state);
+    box-shadow:0 0 8px var(--state); transition:background .4s ease, box-shadow .4s ease; }
+  #badge b{ font:600 13px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--state);
+    transition:color .4s ease; }
+  #badge span{ color:var(--ink); opacity:.85; }
+
+  #fps{ position:fixed; right:14px; bottom:14px; z-index:11; color:var(--dim); font-size:11px; display:none;
+    font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  #fatal{ position:fixed; inset:0; z-index:99; display:none; place-items:center; background:#04141a; color:var(--dim);
+    font-size:15px; text-align:center; line-height:2; }
+  .hidden{ display:none !important; }
+
+  /* —— UI 编排：入场 stagger —— */
+  @keyframes riseIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes riseInC { from { opacity:0; transform:translate(-50%,22px); } to { opacity:1; transform:translate(-50%,0); } }
+  #title { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .25s backwards; }
+  #hint  { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .5s backwards; }
+  #panel { animation: riseInC .9s cubic-bezier(.18,.72,.22,1) .7s backwards; }
+
+  /* —— 面板显隐过渡（替代 H 键硬切） —— */
+  #title, #hint, #panel { transition: opacity .45s ease, transform .45s cubic-bezier(.5,0,.25,1); }
+  .ui-off { opacity:0 !important; pointer-events:none !important; }
+  #panel.ui-off { transform: translate(-50%, 26px); }
+  #title.ui-off { transform: translateY(-14px); }
+  #hint.ui-off  { transform: translateY(-14px); }
+
+  /* —— 弹性微交互（transition 已在组件定义处声明） —— */
+  @keyframes pop { 0% { transform:scale(.88); } 55% { transform:scale(1.1); } 100% { transform:scale(1); } }
+  .preset.pop { animation: pop .38s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes badgePop { 0% { transform:scale(.9); } 60% { transform:scale(1.07); } 100% { transform:scale(1); } }
+  #badge.pop { animation: badgePop .42s cubic-bezier(.34,1.56,.64,1); }
+
+  /* —— 窄屏：面板换行，滑杆独占一行 —— */
+  @media (max-width:640px){
+    #hint{ display:none; }
+    #panel{ flex-wrap:wrap; justify-content:center; gap:8px 10px; padding:10px 12px; bottom:12px; }
+    #sliderWrap{ order:5; width:100%; }
+    #badge{ min-width:0; padding:8px 12px; }
+  }
+  /* —— 尊重系统的减弱动效偏好 —— */
+  @media (prefers-reduced-motion:reduce){
+    *, *::before, *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  }</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="title"><b>Tri-State Water</b><span>三态之水 · WebGL2</span></div>
+<div id="hint">拖动 环视 · 滚轮 缩放<br>点击水面 荡开涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换状态 &nbsp;<kbd>H</kbd> 隐藏面板</div>
+
+<div id="panel" role="group" aria-label="温度控制">
+  <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">❄️ 冰</button>
+  <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">💧 水</button>
+  <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">♨️ 汽</button>
+  <div id="sliderWrap">
+    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
+    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0°C 冰点</span><span style="left:73.1%">100°C 沸点</span><span>150°</span></div>
+  </div>
+  <div id="badge" role="status" aria-live="polite"><i></i><b>24°C</b><span>液态 · 水</span></div>
+</div>
+<div id="fps"></div>
+<div id="fatal"><div>此演示需要支持 <b>WebGL2</b> 的浏览器。<br>请使用较新的 Chrome / Edge / Firefox / Safari 打开。</div></div>
+
+<script>
+'use strict';
+window.__frames = 0;
+window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
+/* ================= 基础工具 ================= */
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => x < a ? a : (x > b ? b : x);
+const ssj = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+
+const canvas = $('#gl');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true });
+if (!gl) { $('#fatal').style.display = 'grid'; throw new Error('no webgl2'); }
+const extHDR = gl.getExtension('EXT_color_buffer_float');
+
+// WebGL 上下文丢失保护：提示并在恢复后自动重载
+canvas.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  const f = $('#fatal');
+  f.firstElementChild.innerHTML = '图形上下文意外丢失。<br>正在尝试恢复……若长时间无响应，请刷新页面。';
+  f.style.display = 'grid';
+});
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+
+// —— UI 元素引用（提前到 URL 预置之前） ——
+const slider = $('#slider'), badge = $('#badge');
+const badgeT = badge.querySelector('b'), badgeS = badge.querySelector('span');
+const presetBtns = [...document.querySelectorAll('.preset')];
+function markPresets(near) {
+  presetBtns.forEach(b => {
+    const on = +b.dataset.t === near;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+}
+
+const params = new URLSearchParams(location.search);
+const DEBUG = params.has('debug');
+if (DEBUG) $('#fps').style.display = 'block';
+
+/* ================= 迷你矩阵库 ================= */
+function m4Persp(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return new Float32Array([f / aspect, 0, 0, 0,  0, f, 0, 0,  0, 0, (far + near) * nf, -1,  0, 0, 2 * far * near * nf, 0]);
+}
+function m4Mul(a, b) { // column-major a*b
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  return o;
+}
+function camBasis(yaw, pitch) {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const f = [sy * cp, sp, -cy * cp];
+  const r = [cy, 0, sy];
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  return { f, r, u };
+}
+function rollBasis(B, roll) {
+  const c = Math.cos(roll), s = Math.sin(roll);
+  return { f: B.f,
+    r: [B.r[0] * c + B.u[0] * s, B.r[1] * c + B.u[1] * s, B.r[2] * c + B.u[2] * s],
+    u: [B.u[0] * c - B.r[0] * s, B.u[1] * c - B.r[1] * s, B.u[2] * c - B.r[2] * s] };
+}
+function m4View(eye, B) {
+  const { f, r, u } = B;
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  return new Float32Array([
+    r[0], u[0], -f[0], 0,  r[1], u[1], -f[1], 0,  r[2], u[2], -f[2], 0,
+    -dot(r, eye), -dot(u, eye), dot(f, eye), 1]);
+}
+const v3norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+
+/* ================= GLSL 公共块 ================= */
+const NOISE = `
+float hash1(vec2 p){ p = fract(p*vec2(127.1,311.7)); p += dot(p,p+34.5); return fract(p.x*p.y); }
+vec2 hash2(vec2 p){ float n = hash1(p); return vec2(n, hash1(p+n+17.13)); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  float a = hash1(i), b = hash1(i+vec2(1,0)), c = hash1(i+vec2(0,1)), d = hash1(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbm(vec2 p){
+  float s = 0.0, a = 0.5;
+  for(int i=0;i<4;i++){ s += a*vnoise(p); p = p*2.03 + vec2(19.7,7.3); a *= 0.5; }
+  return s;
+}
+vec3 worley(vec2 p){
+  vec2 n = floor(p), f = fract(p);
+  float F1 = 8.0, F2 = 8.0, id = 0.0;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g = vec2(float(i), float(j));
+    vec2 o = hash2(n+g);
+    float d = length(g+o-f);
+    if(d < F1){ F2 = F1; F1 = d; id = hash1(n+g+31.7); }
+    else if(d < F2){ F2 = d; }
+  }
+  return vec3(F1, F2, id);
+}
+float web(vec2 p){ vec3 w = worley(p); return 1.0 - smoothstep(0.02, 0.16, w.y - w.x); }
+vec3 skyColor(vec3 rd, vec3 sun){
+  float y = max(rd.y, 0.0);
+  vec3 zen  = vec3(0.16, 0.42, 0.78);          // 天顶：饱和蓝，不再灰蒙
+  vec3 hor  = vec3(0.78, 0.90, 0.98);          // 地平线：明亮暖白
+  vec3 c = mix(hor, zen, pow(y, 0.62));
+  // 近地平线的暖色微光（阳光散射）
+  c = mix(c, vec3(0.98, 0.94, 0.86), (1.0 - smoothstep(0.0, 0.35, y))*0.28);
+  float sd = max(dot(rd,sun), 0.0);
+  c += vec3(1.0,0.83,0.58)*pow(sd,8.0)*0.30;
+  c += vec3(1.0,0.90,0.72)*pow(sd,320.0)*5.0;
+  return c;
+}
+// 远山：两层山脊剪影（大气透视，越远越淡）
+vec3 mountains(vec3 rd, vec3 sky){
+  float y = rd.y;
+  if(y > 0.3) return sky;
+  // 山脊高度用径向角度采样，保证环视连续
+  float az = atan(rd.z, rd.x);
+  // 远层：低缓，约 1200m 外，被大气推成蓝白
+  float r1 = 0.055*fbm(vec2(az*2.6, 0.0)) + 0.028*fbm(vec2(az*7.1, 4.7))
+           + 0.014*sin(az*3.0 + 1.7);
+  // 近层：更高峻，约 600m 外
+  float r2 = 0.085*fbm(vec2(az*2.1 + 9.3, 0.0)) + 0.042*fbm(vec2(az*5.7 + 3.1, 8.2))
+           + 0.020*sin(az*2.2 + 5.2);
+  vec3 col = sky;
+  if(y < r1){                                    // 远山：雾蓝
+    float depth = smoothstep(r1, r1 - 0.02, y);
+    vec3 mc = mix(vec3(0.52, 0.66, 0.82), vec3(0.30, 0.44, 0.62), smoothstep(0.0, 0.06, y));
+    col = mix(col, mc, depth*0.85);
+  }
+  if(y < r2){                                    // 近山：深青蓝
+    float depth = smoothstep(r2, r2 - 0.025, y);
+    vec3 mc = mix(vec3(0.30, 0.42, 0.56), vec3(0.13, 0.22, 0.34), smoothstep(0.0, 0.08, y));
+    col = mix(col, mc, depth*0.94);
+  }
+  // 山脚与水线衔接的雾化
+  float hz = 1.0 - smoothstep(0.0, 0.02, y);
+  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.35);
+  return col;
+}`;
+
+/* ================= 着色器 ================= */
+// —— 水面顶点：多向正弦波叠加 + 沸腾扰动 + 交互涟漪（解析法线）
+const waveDef = [];
+{
+  let seed = 7, rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 22; i++) {
+    const t = i / 21;
+    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);   // 波长 7m → ~0.3m
+    const ang = rand() * Math.PI * 2;
+    const k = 2 * Math.PI / len;
+    const amp = len * 0.014 * (0.7 + rand() * 0.6);
+    const w = Math.sqrt(9.8 * k) * (0.92 + rand() * 0.16);                    // 深水色散关系
+    waveDef.push({ dx: Math.cos(ang), dz: Math.sin(ang), k, amp, w, ph: rand() * 6.28 });
+  }
+}
+const WAVE_CODE = waveDef.map(v =>
+  `{ float phz = dot(vec2(${v.dx.toFixed(5)},${v.dz.toFixed(5)}), p)*${v.k.toFixed(5)} + uTime*${v.w.toFixed(5)} + ${v.ph.toFixed(5)};
+     h += ${v.amp.toFixed(6)}*sin(phz);
+     grad += vec2(${v.dx.toFixed(5)},${v.dz.toFixed(5)})*(${(v.amp * v.k).toFixed(6)}*cos(phz)); }`).join('\n');
+
+const VS_WATER = `
+uniform mat4 uVP;
+uniform float uTime, uWaveAmp, uSteam;
+uniform vec4 uRipple[24];
+layout(location = 0) in vec3 aPos;
+out vec3 vW; out vec3 vN; out float vH;
+void main(){
+  vec2 p = aPos.xz;
+  float h = 0.0; vec2 grad = vec2(0.0);
+  ${WAVE_CODE}
+  h += uSteam*0.016*sin(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3);
+  grad += uSteam*0.016*vec2(6.7*cos(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3),
+                            -7.9*sin(p.x*6.7+uTime*8.5)*cos(p.y*7.9-uTime*7.3));
+  for(int i=0;i<24;i++){
+    vec4 r = uRipple[i];
+    float age = uTime - r.z;
+    if(r.w > 0.0 && age > 0.0 && age < 5.0){
+      vec2 dv = p - r.xy;
+      float d = max(length(dv), 1e-4);
+      float front = d - age*2.2;
+      float env = exp(-front*front*3.5)*exp(-age*1.3)*r.w;
+      h += env*cos(front*8.0);
+      float dhdd = env*(-7.0*front-1.3)*cos(front*8.0) - env*sin(front*8.0)*8.0;
+      grad += (dhdd/d)*dv;
+    }
+  }
+  h *= uWaveAmp; grad *= uWaveAmp;
+  vec3 wp = vec3(p.x, h, p.y);
+  vW = wp; vN = vec3(-grad.x, 1.0, -grad.y); vH = h;
+  gl_Position = uVP*vec4(wp, 1.0);
+}`;
+
+const FS_WATER = `
+precision highp float;
+uniform vec3 uCam, uSun, uWaterCol, uDeep;
+uniform float uTime, uIce, uSteam, uDeepIce;
+in vec3 vW; in vec3 vN; in float vH;
+out vec4 outColor;
+${NOISE}
+void main(){
+  vec3 V = normalize(uCam - vW);
+  float e = 0.10;
+  vec2 pd = vW.xz*1.9 + uTime*vec2(0.22,0.17);
+  vec2 g1 = vec2(vnoise(pd+vec2(e,0.0))-vnoise(pd-vec2(e,0.0)),
+                 vnoise(pd+vec2(0.0,e))-vnoise(pd-vec2(0.0,e)))/(2.0*e);
+  vec2 pd2 = vW.xz*5.3 - uTime*vec2(0.31,0.24);
+  vec2 g2 = vec2(vnoise(pd2+vec2(e,0.0))-vnoise(pd2-vec2(e,0.0)),
+                 vnoise(pd2+vec2(0.0,e))-vnoise(pd2-vec2(0.0,e)))/(2.0*e);
+  float detail = mix(0.16, 0.05, uIce)*(1.0 + 0.7*uSteam);
+  vec3 N = normalize(vN + vec3(-g1.x*0.5-g2.x*0.25, 0.0, -g1.y*0.5-g2.y*0.25)*detail);
+
+  float NdV = max(dot(N, V), 0.0);
+  float F = 0.02 + 0.98*pow(1.0-NdV, 5.0);
+  vec3 R = reflect(-V, N);
+  R.y = abs(R.y)*0.98 + 0.02;
+  vec3 refl = mountains(R, skyColor(R, uSun));
+  float cosSun = max(dot(R, uSun), 0.0);
+  float spec = pow(cosSun, 720.0)*3.5 + pow(cosSun, 64.0)*0.18;
+  float crest = clamp(vH*1.6 + 0.45, 0.0, 1.0);
+  vec3 sss = uWaterCol*(0.20 + 0.55*crest)*0.55;
+
+  vec3 colW = refl*F + vec3(1.0,0.92,0.75)*spec + sss*(1.0-F);
+  float aW = F;
+
+  vec3 col = colW; float alpha = aW;
+  if(uIce > 0.001){
+    vec3 w2 = worley(vW.xz*1.35 + 13.7);
+    float cracks = 1.0 - smoothstep(0.015, 0.13, w2.y - w2.x);
+    float frost = fbm(vW.xz*3.1 + 5.0);
+    vec3 iceCol = vec3(0.58,0.78,0.88)*(0.62 + 0.5*frost);
+    iceCol += vec3(0.95,0.99,1.0)*cracks*(0.35 + 0.65*frost)*(1.0 + 0.9*uDeepIce);
+    iceCol = mix(iceCol, vec3(0.80,0.89,0.94)*(0.68 + 0.42*frost), uDeepIce*0.75);
+    float specIce = pow(max(dot(R, uSun), 0.0), 900.0)*0.9;
+    vec2 cellId = floor(vW.xz*26.0);
+    vec2 cellUv = fract(vW.xz*26.0);
+    vec2 sp = hash2(cellId + 3.1);
+    float tw = step(0.995, hash1(cellId + floor(uTime*4.0)))*smoothstep(0.10, 0.0, length(cellUv - sp));
+    vec3 shade = iceCol*(0.55 + 0.45*max(uSun.y,0.0)) + vec3(0.85,0.92,1.0)*specIce + vec3(1.0)*tw*1.2*frost;
+    float aI = clamp(F + 0.55 + uDeepIce*0.35, 0.0, 0.985);
+    col = mix(col, shade*aI, uIce);
+    alpha = mix(alpha, aI, uIce);
+  }
+
+  float dist = length(uCam - vW);
+  float fog = 1.0 - exp(-dist*0.055);
+  col = mix(col, uDeep, fog);
+  alpha = mix(alpha, 1.0, fog*0.95);
+  outColor = vec4(col, alpha);
+}`;
+
+// —— 海床：卵石 + 焦散 + 水体吸收
+const VS_SEABED = `
+uniform mat4 uVP;
+layout(location = 0) in vec3 aPos;
+out vec3 vW;
+void main(){ vW = aPos; gl_Position = uVP*vec4(aPos, 1.0); }`;
+
+const FS_SEABED = `
+precision highp float;
+uniform vec3 uCam, uSun, uDeep;
+uniform float uTime, uIce, uSteam, uWarm, uDeepIce;
+in vec3 vW;
+out vec4 outColor;
+${NOISE}
+void main(){
+  vec2 p = vW.xz;
+  vec3 w = worley(p*1.5);
+  float mask = smoothstep(0.52, 0.38, w.x);
+  vec3 pcol = mix(vec3(0.50,0.45,0.38), vec3(0.66,0.62,0.55), hash1(vec2(w.z*7.1, w.z*1.3)));
+  pcol = mix(pcol, vec3(0.38,0.33,0.30), step(0.75, hash1(vec2(w.z*13.7, w.z*2.9))));
+  float bump = 1.0 - smoothstep(0.0, 0.55, w.x);
+  vec3 sand = vec3(0.55,0.49,0.38)*(0.78 + 0.42*vnoise(p*8.0) + 0.18*vnoise(p*31.0));
+  vec3 alb = mix(sand, pcol*(0.45 + 0.75*bump), mask);
+
+  float c1 = web(p*0.75 + vec2(uTime*0.13, uTime*0.09));
+  float c2 = web(p*1.35 + vec2(-uTime*0.11, uTime*0.15) + 4.7);
+  float raw = clamp(c1*0.6 + c2*0.6, 0.0, 1.0);
+  float ca = mix(pow(raw, 1.6), pow(raw, 3.0)*1.3, uIce);
+  float caust = ca*(0.35 + 0.65*max(uSun.y, 0.0));
+  vec3 lit = alb*(0.42 + 0.58*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*2.4;
+
+  vec3 V = normalize(uCam - vW);
+  float dist = length(uCam - vW);
+  float path = 2.35/clamp(V.y, 0.18, 1.0);
+  vec3 sigma = vec3(0.40,0.13,0.10)*(1.0 + 0.9*uWarm + 0.45*uSteam)*(1.0 - uIce*(0.42 + 0.40*uDeepIce));
+  vec3 T = exp(-sigma*path);
+  float dfog = 1.0 - exp(-dist*0.055);
+  vec3 col = mix(lit*T + uDeep*(1.0-T), uDeep, dfog);
+  outColor = vec4(col, 1.0);
+}`;
+
+// —— 天空
+const VS_SKY = `
+uniform vec3 uCamR, uCamU, uCamF;
+uniform float uTanF, uAspect;
+layout(location = 0) in vec2 aPos;
+out vec2 vNdc;
+void main(){ vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`;
+
+const FS_SKY = `
+precision highp float;
+uniform vec3 uCam, uSun, uCamR, uCamU, uCamF;
+uniform float uTime, uTanF, uAspect;
+in vec2 vNdc;
+out vec4 outColor;
+${NOISE}
+void main(){
+  vec3 rd = normalize(uCamF + uCamR*vNdc.x*uTanF*uAspect + uCamU*vNdc.y*uTanF);
+  vec3 c = skyColor(rd, uSun);
+  c = mountains(rd, c);
+  if(rd.y > 0.015){
+    vec2 cp = rd.xz/(rd.y + 0.18);
+    float cl = fbm(cp*0.7 + vec2(uTime*0.008, 0.0));
+    c = mix(c, vec3(0.92,0.94,0.96), smoothstep(0.58,0.85,cl)*0.32*smoothstep(0.0,0.25,rd.y));
+  }
+  outColor = vec4(c, 1.0);
+}`;
+
+// —— 蒸汽（公告板羽流）
+const VS_STEAM = `
+uniform mat4 uVP;
+uniform vec3 uCamR, uCamU;
+uniform float uTime;
+layout(location = 0) in vec2 aCorner;
+layout(location = 1) in float aSeed;
+out vec2 vUv; out float vEnv; out float vSeed;
+${NOISE}
+void main(){
+  float sd = aSeed;
+  float h1 = hash1(vec2(sd,1.7)), h2 = hash1(vec2(sd,9.1)), h3 = hash1(vec2(sd,4.3));
+  float cyc = fract(uTime*0.11*(0.6 + 0.8*h1) + sd*0.618);
+  vec3 c = vec3((h2*2.0-1.0)*4.5, cyc*3.8, -3.0 + (h3*2.0-1.0)*4.8);
+  float env = sin(3.14159*cyc); env *= env;
+  c.x += sin(uTime*0.4 + sd*9.0)*0.6*cyc;
+  float s = 1.1 + cyc*2.2;
+  vec3 wp = c + (uCamR*aCorner.x + uCamU*aCorner.y)*s;
+  vUv = aCorner*0.5 + 0.5; vEnv = env; vSeed = sd;
+  gl_Position = uVP*vec4(wp, 1.0);
+}`;
+
+const FS_STEAM = `
+precision highp float;
+uniform float uTime, uSteam;
+in vec2 vUv; in float vEnv; in float vSeed;
+out vec4 outColor;
+${NOISE}
+void main(){
+  vec2 q = vUv*2.0 - 1.0;
+  float r2 = dot(q, q);
+  if(r2 > 1.0) discard;
+  float n = fbm(vUv*vec2(2.6,2.6) + vec2(vSeed*9.7, -uTime*0.35));
+  float body = smoothstep(0.34, 0.74, n*0.72 + (1.0-r2)*0.50);
+  float a = body*vEnv*uSteam*0.80;
+  outColor = vec4(vec3(0.88,0.92,0.96)*a, a);
+}`;
+
+// —— 雪（点精灵）
+const VS_SNOW = `
+uniform mat4 uVP;
+uniform float uTime, uSnow, uDPR;
+layout(location = 0) in vec4 aSeed;
+out float vA;
+${NOISE}
+void main(){
+  float sd = aSeed.w;
+  float speed = 0.55 + 0.5*hash1(vec2(sd,3.1));
+  vec3 p = aSeed.xyz;
+  p.y = 4.6 - mod(uTime*speed*0.9 + sd*13.7, 4.6);
+  p.x += sin(uTime*0.6 + sd*17.0)*0.5;
+  p.z += cos(uTime*0.5 + sd*23.0)*0.35;
+  vA = uSnow;
+  gl_Position = uVP*vec4(p, 1.0);
+  gl_PointSize = clamp((1.5 + 2.5*hash1(vec2(sd,7.7)))*uDPR*14.0/gl_Position.w, 1.0, 9.0);
+}`;
+
+const FS_SNOW = `
+precision highp float;
+in float vA;
+out vec4 outColor;
+void main(){
+  vec2 q = gl_PointCoord*2.0 - 1.0;
+  float a = (1.0 - dot(q,q))*0.75*vA;
+  if(a < 0.01) discard;
+  outColor = vec4(vec3(0.95,0.97,1.0)*a, a);
+}`;
+
+// —— 后处理：热浪扭曲 + 蒸汽薄雾 + 太阳眩光 + 色调映射
+const VS_POST = `
+layout(location = 0) in vec2 aPos;
+out vec2 vUv;
+void main(){ vUv = aPos*0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const FS_POST = `
+precision highp float;
+uniform sampler2D uTex;
+uniform float uTime, uSteam, uSunVis, uHdr;
+uniform float uFlash, uAberr, uShake, uIdle;
+uniform vec2 uSunUV;
+uniform vec2 uShakeDir;
+in vec2 vUv;
+out vec4 outColor;
+${NOISE}
+void main(){
+  vec2 uv = vUv;
+  uv += uShakeDir*uShake;
+  float shimmerMask = smoothstep(1.0, 0.15, uv.y);
+  vec2 so = vec2(vnoise(uv*vec2(55.0,30.0) + uTime*vec2(2.0,4.0)),
+                 vnoise(uv*vec2(50.0,28.0) - uTime*vec2(2.4,3.2))) - 0.5;
+  uv += so*0.007*uSteam*shimmerMask;
+  vec3 col;
+  if(uAberr > 0.0015){
+    vec2 ab = (uv - 0.5)*uAberr;
+    col = vec3(texture(uTex, uv - ab).r, texture(uTex, uv).g, texture(uTex, uv + ab).b);
+  } else {
+    col = texture(uTex, uv).rgb;
+  }
+  col += vec3(0.90,0.97,1.0)*uFlash*(0.6 + 0.4*hash1(gl_FragCoord.xy));
+
+  float haze = fbm(uv*vec2(3.0,2.2) + vec2(0.0, -uTime*0.05));
+  col = mix(col, vec3(0.75,0.80,0.84), uSteam*0.07*haze);
+
+  float thr = mix(0.72, 1.15, uHdr);
+  if(uSunVis > 0.001){
+    vec2 dir = uSunUV - uv;
+    vec3 acc = vec3(0.0);
+    for(int i=0;i<24;i++){
+      float t = float(i)/23.0;
+      acc += max(texture(uTex, uv + dir*t*0.6).rgb - thr, 0.0)*(1.0-t);
+    }
+    col += acc/24.0*1.6*uSunVis;
+    vec3 s2 = vec3(0.0);
+    for(int i=-10;i<=10;i++){
+      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.012, 0.0)).rgb - thr, 0.0);
+    }
+    col += s2/21.0*0.5*uSunVis;
+  }
+
+  col *= 1.05;
+  col = clamp((col*(2.51*col+0.03))/(col*(2.43*col+0.59)+0.14), 0.0, 1.0);
+  col = pow(col, vec3(1.0/2.2));
+  vec2 q = vUv - 0.5;
+  float vig = 1.0 - (0.45 - 0.05*uIdle)*dot(q,q);
+  col *= vig;
+  float grain = (hash1(gl_FragCoord.xy + uTime) - 0.5)*(0.012 + 0.008*uIdle);
+  col += grain;
+  outColor = vec4(col, 1.0);
+}`;
+
+/* ================= 编译辅助 ================= */
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n'));
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, '#version 300 es\n' + vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, '#version 300 es\n' + fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  p._u = {};
+  return p;
+}
+function U(p, n) { return p._u[n] !== undefined ? p._u[n] : (p._u[n] = gl.getUniformLocation(p, n)); }
+
+const progWater = program(VS_WATER, FS_WATER);
+const progSeabed = program(VS_SEABED, FS_SEABED);
+const progSky = program(VS_SKY, FS_SKY);
+const progSteam = program(VS_STEAM, FS_STEAM);
+const progSnow = program(VS_SNOW, FS_SNOW);
+const progPost = program(VS_POST, FS_POST);
+
+/* ================= 几何体 ================= */
+function vao(bindFn, attrs) {
+  const v = gl.createVertexArray();
+  gl.bindVertexArray(v);
+  bindFn();
+  gl.bindVertexArray(null);
+  return v;
+}
+function attrib(loc, data, size, stride = 0, offset = 0) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, offset);
+}
+// 水面网格
+const waterVAO = (() => {
+  const N = 300, half = 20;
+  const verts = [], idx = [];
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++)
+    verts.push(-half + 40 * i / N, 0, -half + 40 * j / N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const ib = gl.createBuffer();
+  const v = vao(() => {
+    attrib(0, new Float32Array(verts), 3);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+  });
+  v.count = idx.length;
+  return v;
+})();
+// 海床
+const seabedVAO = (() => {
+  const ib = gl.createBuffer();
+  const v = vao(() => {
+    attrib(0, new Float32Array([-60, -2.35, -60, 60, -2.35, -60, -60, -2.35, 60, 60, -2.35, 60]), 3);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 2, 1, 3]), gl.STATIC_DRAW);
+  });
+  v.count = 6;
+  return v;
+})();
+// 全屏大三角
+const triVAO = vao(() => attrib(0, new Float32Array([-1, -1, 3, -1, -1, 3]), 2));
+// 蒸汽羽流 24 块
+const steamVAO = (() => {
+  const corners = [-1, -1, 1, -1, -1, 1, 1, 1], verts = [], idx = [];
+  for (let q = 0; q < 24; q++) {
+    for (let c = 0; c < 4; c++) verts.push(corners[c * 2], corners[c * 2 + 1], q * 7.13 + 1.7);
+    const b = q * 4; idx.push(b, b + 1, b + 2, b + 2, b + 1, b + 3);
+  }
+  const ib = gl.createBuffer();
+  const v = vao(() => {
+    attrib(0, new Float32Array(verts), 2, 12, 0);
+    attrib(1, new Float32Array(verts), 1, 12, 8);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+  });
+  v.count = idx.length;
+  return v;
+})();
+// 雪 160 点
+const snowVAO = (() => {
+  const seeds = new Float32Array(160 * 4);
+  for (let i = 0; i < 160; i++) {
+    seeds[i * 4] = Math.random() * 14 - 7;
+    seeds[i * 4 + 1] = Math.random() * 4.6;
+    seeds[i * 4 + 2] = Math.random() * 12 - 9;
+    seeds[i * 4 + 3] = Math.random() * 100;
+  }
+  return vao(() => attrib(0, seeds, 4));
+})();
+
+/* ================= 场景 FBO ================= */
+let sceneFBO = null, fboW = 0, fboH = 0;
+const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+let resAdj = 1.0;
+function makeFBO(w, h) {
+  if (sceneFBO) { gl.deleteTexture(sceneFBO.tex); gl.deleteFramebuffer(sceneFBO.fb); }
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (extHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  sceneFBO = { tex, fb };
+  fboW = w; fboH = h;
+}
+function resize() {
+  const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
+  const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  const fw = Math.max(2, Math.floor(w * resAdj)), fh = Math.max(2, Math.floor(h * resAdj));
+  if (fw !== fboW || fh !== fboH) makeFBO(fw, fh);
+}
+window.addEventListener('resize', resize);
+
+/* ================= 场景状态 ================= */
+const SUN = v3norm([-0.32, 0.42, -0.85]);
+const CAM_POS = [0, 1.65, 7.2];
+const FOV = 55 * Math.PI / 180;
+let yaw = 0, pitch = -0.52;
+let yawV = 0, pitchV = 0;               // 相机角速度（惯性）
+let zoom = 0, zoomV = 0;                // 滚轮缩放（0 近 → 1 远）
+let camPos = CAM_POS.slice();           // 动态相机位置（含 idle 呼吸）
+let simTime = 0;
+let targetTemp = 24, dispTemp = 24;
+let tempVel = 0;                        // 温度变化率 °C/s（驱动色差脉冲）
+// —— 相变冲击 / 打击感特效状态 ——
+let flash = 0, aberr = 0, shake = 0, shakeAng = 0, shakeFreq = 0;
+let icePrev = 0, steamPrev = 0;         // 相变跨越检测
+let idleAmt = 0;                        // 静止呼吸权重
+let idleClock = 0;                      // 仅静止时前进的相位钟
+let lastActive = 0;                     // 上次交互的 simTime
+
+// URL 预置：?state=ice|water|steam  ?ui=0  ?debug
+{
+  const s = params.get('state');
+  if (s === 'ice') targetTemp = dispTemp = -36;
+  else if (s === 'steam') targetTemp = dispTemp = 130;
+  else if (s === 'water') targetTemp = dispTemp = 24;
+  if (s) {
+    slider.value = targetTemp;
+    markPresets(targetTemp);
+  }
+  if (params.get('ui') === '0') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('hidden'));
+}
+
+// 涟漪槽
+const NR = 24;
+const ripples = new Float32Array(NR * 4).fill(0);
+for (let i = 0; i < NR; i++) ripples[i * 4 + 2] = -100;
+let rippleHead = 0;
+function addRipple(x, z, k) {
+  const i = rippleHead; rippleHead = (rippleHead + 1) % NR;
+  ripples[i * 4] = x; ripples[i * 4 + 1] = z;
+  ripples[i * 4 + 2] = simTime; ripples[i * 4 + 3] = k || (0.32 + Math.random() * 0.1);
+}
+
+// 每帧导出的状态参数
+let P = {};
+function updateStateParams() {
+  const t = dispTemp;
+  const ice = ssj(1.5, -4, t);
+  const deepIce = ssj(-10, -34, t);
+  const steam = ssj(72, 108, t) * (1 - ice);
+  const warm = ssj(35, 95, t) * (1 - steam);
+  const snow = ssj(-3, -13, t);
+  const mix3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  let deep = mix3([0.010, 0.085, 0.110], [0.025, 0.150, 0.160], clamp(warm * 0.8 + steam * 0.4, 0, 1));
+  deep = mix3(deep, [0.040, 0.190, 0.220], ice);
+  let waterCol = mix3([0.040, 0.300, 0.330], [0.070, 0.360, 0.330], warm);
+  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce), deep, waterCol };
+}
+
+/* ================= 输入 ================= */
+let dragging = false, moved = 0, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+  yawV = 0; pitchV = 0;                 // 按住即接管，清掉惯性
+  lastActive = simTime;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  if (moved > 6) {
+    lastActive = simTime;
+    yaw = clamp(yaw - dx * 0.0032, -1.25, 1.25);
+    pitch = clamp(pitch - dy * 0.0032, -1.15, -0.15);
+    // 记录瞬时角速度（指数平滑），松手后作为惯性初速度
+    const k = 0.55;
+    yawV = yawV * (1 - k) + (-dx * 0.0032 * 60) * k;
+    pitchV = pitchV * (1 - k) + (-dy * 0.0032 * 60) * k;
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  dragging = false;
+  if (moved <= 6 && P.ice < 0.6) {
+    lastActive = simTime;
+    const B = camBasis(yaw, pitch);
+    const ndcX = (e.clientX / canvas.clientWidth) * 2 - 1;
+    const ndcY = 1 - (e.clientY / canvas.clientHeight) * 2;
+    const tf = Math.tan(FOV / 2), asp = canvas.clientWidth / canvas.clientHeight;
+    const dir = v3norm([
+      B.f[0] + B.r[0] * ndcX * tf * asp + B.u[0] * ndcY * tf,
+      B.f[1] + B.r[1] * ndcX * tf * asp + B.u[1] * ndcY * tf,
+      B.f[2] + B.r[2] * ndcX * tf * asp + B.u[2] * ndcY * tf]);
+    if (dir[1] < -0.02) {
+      const t = -camPos[1] / dir[1];
+      const px = camPos[0] + dir[0] * t, pz = camPos[2] + dir[2] * t;
+      if (Math.abs(px) < 13 && Math.abs(pz) < 13) {
+        addRipple(px, pz, 0.5 + Math.random() * 0.12);   // 加强涟漪
+        // —— 打击感：轻微色差 + 震动 ——
+        aberr = Math.max(aberr, 0.010);
+        shake = Math.max(shake, 0.0035);
+        shakeAng = Math.random() * Math.PI * 2; shakeFreq = 26;
+      }
+    }
+  }
+});
+canvas.addEventListener('pointercancel', () => dragging = false);
+// 滚轮缩放（0 近 → 1 远）
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  lastActive = simTime;
+  zoomV += (e.deltaY > 0 ? 1 : -1) * 0.38 * Math.min(Math.abs(e.deltaY), 120) / 60;
+  zoomV = clamp(zoomV, -1.4, 1.4);
+}, { passive: false });
+
+slider.addEventListener('input', () => setTemp(+slider.value, false));
+presetBtns.forEach(b => b.addEventListener('click', () => setTemp(+b.dataset.t, true)));
+function setTemp(t, fromPreset) {
+  targetTemp = t;
+  lastActive = simTime;
+  // 地址栏同步：预设写入 ?state=，滑杆自由值则移除该参数（可分享当前状态）
+  const st = { '-36': 'ice', '24': 'water', '130': 'steam' }[String(t)];
+  const url = new URL(location.href);
+  if (st) url.searchParams.set('state', st); else url.searchParams.delete('state');
+  history.replaceState(null, '', url);
+  if (fromPreset) {
+    slider.value = t;
+    markPresets(t);
+    presetBtns.forEach(b => { if (+b.dataset.t === t) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
+  } else {
+    markPresets(NaN);   // 自由温度：不高亮任何预设（updateUI 会按最近预设回标）
+  }
+}
+window.addEventListener('keydown', e => {
+  if (e.key === '1') setTemp(-36, true);
+  if (e.key === '2') setTemp(24, true);
+  if (e.key === '3') setTemp(130, true);
+  if (e.key === 'h' || e.key === 'H') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off'));
+});
+
+let lastBadge = '', lastPhase = '', lastNear = null;
+function updateUI() {
+  const t = dispTemp, p = P;
+  let name, color;
+  if (p.ice > 0.85) { name = '凝固态 · 冰'; color = '#9adcff'; }
+  else if (p.ice > 0.05) { name = '正在结冰…'; color = '#bfe8ff'; }
+  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; color = '#ffb36b'; }
+  else if (p.steam > 0.05) { name = '正在沸腾…'; color = '#ffd39b'; }
+  else { name = '液态 · 水'; color = '#5fe8cf'; }
+  const deg = Math.round(t) + '°C';
+  if (deg + name !== lastBadge) {
+    badgeT.textContent = deg;
+    badgeS.textContent = name;
+    badge.style.setProperty('--state', color);
+    lastBadge = deg + name;
+  }
+  // 仅在相态名称变化时弹跳徽章，拖动滑杆不再每帧 pop
+  if (name !== lastPhase) {
+    lastPhase = name;
+    badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
+  }
+  const near = [ -36, 24, 130 ].reduce((a, b) => Math.abs(b - targetTemp) < Math.abs(a - targetTemp) ? b : a);
+  if (near !== lastNear) { lastNear = near; markPresets(near); }
+}
+
+/* ================= 渲染 ================= */
+function setCommon(p, B, VP) {
+  gl.uniformMatrix4fv(U(p, 'uVP'), false, VP);
+  gl.uniform3f(U(p, 'uCam'), camPos[0], camPos[1], camPos[2]);
+  gl.uniform3f(U(p, 'uSun'), SUN[0], SUN[1], SUN[2]);
+  gl.uniform1f(U(p, 'uTime'), simTime);
+  return p;
+}
+
+let ema = 16, qTimer = 0;
+function updateQuality(dt) {
+  qTimer += dt;
+  if (qTimer > 1.6) {
+    qTimer = 0;
+    const steps = [1.0, 0.85, 0.7, 0.55];
+    let i = steps.indexOf(resAdj);
+    if (ema > 26 && i < steps.length - 1) { resAdj = steps[i + 1]; resize(); }
+    else if (ema < 15 && i > 0) { resAdj = steps[i - 1]; resize(); }
+  }
+}
+
+function render() {
+  resize();
+  // 速度耦合倾斜：俯仰随角速度轻微前倾/后仰，横滚随偏航速度侧倾（松手滑行时最明显）
+  const leanP = dragging ? 0 : clamp(-pitchV * 0.030, -0.055, 0.055);
+  const roll = clamp(yawV * 0.045, -0.05, 0.05);
+  const B = rollBasis(camBasis(yaw, pitch + leanP), roll);
+  const asp = canvas.width / canvas.height;
+  const view = m4View(CAM_POS, B);
+  const proj = m4Persp(FOV, asp, 0.1, 120);
+  const VP = m4Mul(proj, view);
+
+  // 太阳屏幕位置
+  let sunUV = [0.5, 0.5], sunVis = 0;
+  {
+    const px = camPos[0] + SUN[0] * 800, py = camPos[1] + SUN[1] * 800, pz = camPos[2] + SUN[2] * 800;
+    const cx = VP[0] * px + VP[4] * py + VP[8] * pz + VP[12];
+    const cy = VP[1] * px + VP[5] * py + VP[9] * pz + VP[13];
+    const cw = VP[3] * px + VP[7] * py + VP[11] * pz + VP[15];
+    if (cw > 0.01) {
+      const nx = cx / cw, ny = cy / cw;
+      if (Math.abs(nx) < 1.7 && Math.abs(ny) < 1.7) { sunVis = 1; sunUV = [nx * 0.5 + 0.5, ny * 0.5 + 0.5]; }
+    }
+  }
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fb);
+  gl.viewport(0, 0, fboW, fboH);
+  gl.disable(gl.BLEND);
+  gl.clearColor(P.deep[0], P.deep[1], P.deep[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // 天空
+  gl.disable(gl.DEPTH_TEST);
+  gl.useProgram(progSky);
+  gl.bindVertexArray(triVAO);
+  gl.uniform3f(U(progSky, 'uCamR'), B.r[0], B.r[1], B.r[2]);
+  gl.uniform3f(U(progSky, 'uCamU'), B.u[0], B.u[1], B.u[2]);
+  gl.uniform3f(U(progSky, 'uCamF'), B.f[0], B.f[1], B.f[2]);
+  gl.uniform1f(U(progSky, 'uTanF'), Math.tan(FOV / 2));
+  gl.uniform1f(U(progSky, 'uAspect'), asp);
+  gl.uniform3f(U(progSky, 'uSun'), SUN[0], SUN[1], SUN[2]);
+  gl.uniform3f(U(progSky, 'uCam'), camPos[0], camPos[1], camPos[2]);
+  gl.uniform1f(U(progSky, 'uTime'), simTime);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // 海床
+  gl.enable(gl.DEPTH_TEST);
+  gl.useProgram(progSeabed);
+  gl.bindVertexArray(seabedVAO);
+  setCommon(progSeabed, B, VP);
+  gl.uniform3f(U(progSeabed, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
+  gl.uniform1f(U(progSeabed, 'uIce'), P.ice);
+  gl.uniform1f(U(progSeabed, 'uDeepIce'), P.deepIce);
+  gl.uniform1f(U(progSeabed, 'uSteam'), P.steam);
+  gl.uniform1f(U(progSeabed, 'uWarm'), P.warm);
+  gl.drawElements(gl.TRIANGLES, seabedVAO.count, gl.UNSIGNED_SHORT, 0);
+
+  // 水面（预乘 alpha 混合）
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.useProgram(progWater);
+  gl.bindVertexArray(waterVAO);
+  setCommon(progWater, B, VP);
+  gl.uniform1f(U(progWater, 'uWaveAmp'), P.waveAmp * (1 + 0.07 * idleAmt * Math.sin(idleClock * 0.4)));
+  gl.uniform1f(U(progWater, 'uSteam'), P.steam);
+  gl.uniform1f(U(progWater, 'uIce'), P.ice);
+  gl.uniform1f(U(progWater, 'uDeepIce'), P.deepIce);
+  gl.uniform3f(U(progWater, 'uWaterCol'), P.waterCol[0], P.waterCol[1], P.waterCol[2]);
+  gl.uniform3f(U(progWater, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
+  gl.uniform4fv(U(progWater, 'uRipple'), ripples);
+  gl.drawElements(gl.TRIANGLES, waterVAO.count, gl.UNSIGNED_INT, 0);
+
+  // 蒸汽
+  if (P.steam > 0.003) {
+    gl.depthMask(false);
+    gl.useProgram(progSteam);
+    gl.bindVertexArray(steamVAO);
+    gl.uniformMatrix4fv(U(progSteam, 'uVP'), false, VP);
+    gl.uniform3f(U(progSteam, 'uCamR'), B.r[0], B.r[1], B.r[2]);
+    gl.uniform3f(U(progSteam, 'uCamU'), B.u[0], B.u[1], B.u[2]);
+    gl.uniform1f(U(progSteam, 'uTime'), simTime);
+    gl.uniform1f(U(progSteam, 'uSteam'), P.steam);
+    gl.drawElements(gl.TRIANGLES, steamVAO.count, gl.UNSIGNED_SHORT, 0);
+    gl.depthMask(true);
+  }
+  // 雪
+  if (P.snow > 0.003) {
+    gl.depthMask(false);
+    gl.useProgram(progSnow);
+    gl.bindVertexArray(snowVAO);
+    gl.uniformMatrix4fv(U(progSnow, 'uVP'), false, VP);
+    gl.uniform1f(U(progSnow, 'uTime'), simTime);
+    gl.uniform1f(U(progSnow, 'uSnow'), P.snow);
+    gl.uniform1f(U(progSnow, 'uDPR'), dpr);
+    gl.drawArrays(gl.POINTS, 0, 160);
+    gl.depthMask(true);
+  }
+  gl.disable(gl.BLEND);
+
+  // 后处理
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.DEPTH_TEST);
+  gl.useProgram(progPost);
+  gl.bindVertexArray(triVAO);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex);
+  gl.uniform1i(U(progPost, 'uTex'), 0);
+  gl.uniform1f(U(progPost, 'uTime'), simTime);
+  gl.uniform1f(U(progPost, 'uSteam'), P.steam);
+  gl.uniform2f(U(progPost, 'uSunUV'), sunUV[0], sunUV[1]);
+  gl.uniform1f(U(progPost, 'uSunVis'), sunVis);
+  gl.uniform1f(U(progPost, 'uHdr'), extHDR ? 1 : 0);
+  gl.uniform1f(U(progPost, 'uFlash'), flash);
+  gl.uniform1f(U(progPost, 'uAberr'), aberr);
+  gl.uniform1f(U(progPost, 'uShake'), shake * Math.sin(shakeAng));
+  gl.uniform1f(U(progPost, 'uIdle'), idleAmt);
+  gl.uniform2f(U(progPost, 'uShakeDir'), Math.cos(shakeAng * 0.7), Math.sin(shakeAng * 0.7));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindVertexArray(null);
+}
+
+/* ================= 主循环 ================= */
+updateStateParams();
+resize();
+let last = performance.now(), fpsAcc = 0, fpsN = 0;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  ema = ema * 0.94 + (dt * 1000) * 0.06;
+  if (DEBUG) { fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('#fps').textContent = Math.round(fpsN / fpsAcc) + ' fps · ' + Math.round(fboW) + 'p'; fpsAcc = 0; fpsN = 0; } }
+  simTime += dt;
+
+  // —— 温度缓动 + 变化率 ——
+  const prevDisp = dispTemp;
+  dispTemp += (targetTemp - dispTemp) * Math.min(1, dt * 1.6);
+  if (Math.abs(targetTemp - dispTemp) < 0.05) dispTemp = targetTemp;
+  tempVel = (dispTemp - prevDisp) / Math.max(dt, 1e-4);
+  updateStateParams();
+
+  // —— 相变跨越检测：闪白 + 震屏（max-not-sum 叠加）——
+  const crossedIce = (P.ice > 0.5) !== (icePrev > 0.5);
+  const crossedSteam = (P.steam > 0.5) !== (steamPrev > 0.5);
+  if (crossedIce || crossedSteam) {
+    flash = Math.max(flash, 0.34);
+    shake = Math.max(shake, 0.010);
+    shakeAng = Math.random() * Math.PI * 2; shakeFreq = 18 + Math.random() * 8;
+    addRipple(camPos[0] * 0.6, camPos[2] * 0.6, 0.55);   // 相变冲击在水面荡一圈
+  }
+  icePrev = P.ice; steamPrev = P.steam;
+
+  // —— 温度变化率驱动色差脉冲 ——
+  const targetAberr = Math.min(Math.abs(tempVel) * 0.00075, 0.0072);
+  aberr = Math.max(targetAberr, aberr - aberr * Math.min(1, dt * 2.2));
+  flash *= Math.exp(-dt * 3.4);
+  shake *= Math.exp(-dt * 3.0);
+  shakeAng += dt * shakeFreq;
+  if (flash < 5e-4) flash = 0;
+  if (shake < 2e-5) shake = 0;
+
+  // —— 相机惯性：欠阻尼弹簧（松手回弹）——
+  if (!dragging) {
+    const kDamp = 5.6;                              // 阻尼系数：轻微过冲后自然滑停
+    yaw += yawV * dt; pitch += pitchV * dt;
+    yawV -= yawV * kDamp * dt;
+    pitchV -= pitchV * kDamp * dt;
+    yaw = clamp(yaw, -1.25, 1.25); pitch = clamp(pitch, -1.15, -0.15);
+    if (Math.abs(yawV) < 0.004) yawV = 0;
+    if (Math.abs(pitchV) < 0.004) pitchV = 0;
+  }
+
+  // —— 滚轮缩放弹簧：1-exp(-k·dt) 帧率无关 ——
+  zoom = clamp(zoom + zoomV * dt * 2.4, 0, 1);
+  zoomV -= zoomV * Math.min(1, dt * 7.5);
+  if (Math.abs(zoomV) < 0.01) zoomV = 0;
+
+  // —— idle 呼吸：静止 3 秒后缓慢升起 ——
+  const quiet = simTime - lastActive;
+  idleAmt = clamp((quiet - 3) / 5, 0, 1);
+  if (idleAmt > 0) idleClock += dt * (1 + idleAmt);
+  // 相机轻微漂浮 + 水面波幅微呼吸（乘进 uWaveAmp，见 render）
+  const drift = idleAmt * 0.5;
+  camPos[0] = CAM_POS[0] + Math.sin(idleClock * 0.21) * drift * 0.30;
+  camPos[1] = CAM_POS[1] + Math.sin(idleClock * 0.17 + 1.3) * drift * 0.14;
+  camPos[2] = CAM_POS[2] * (1 + zoom * 0.9) + Math.cos(idleClock * 0.13) * drift * 0.30;
+
+  updateQuality(dt);
+  render();
+  updateUI();
+  window.__frames++;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+.worktrees/
+.box-agent/
+.box-agent-scratch/
+.wrangler/
