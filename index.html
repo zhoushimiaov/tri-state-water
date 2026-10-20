@@ -291,8 +291,8 @@ vec3 skyColor(vec3 rd, vec3 sun){
   // 近地平线的暖色微光（阳光散射）
   c = mix(c, vec3(0.96, 0.91, 0.83), (1.0 - smoothstep(0.0, 0.35, y))*0.19);
   float sd = max(dot(rd,sun), 0.0);
-  c += vec3(1.0,0.83,0.58)*pow(sd,8.0)*0.30;
-  c += vec3(1.0,0.90,0.72)*pow(sd,320.0)*5.0;
+  c += vec3(1.0,0.87,0.70)*pow(sd,8.0)*0.18;
+  c += vec3(1.0,0.93,0.84)*pow(sd,320.0)*2.0;
   return c;
 }
 // 远山：两层山脊剪影（大气透视，越远越淡）
@@ -332,7 +332,9 @@ const waveDef = [];
   const waveCount = LOW_QUALITY ? 14 : 22;
   for (let i = 0; i < waveCount; i++) {
     const t = i / (waveCount - 1);
-    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);   // 波长 7m → ~0.3m
+    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);
+    // 保证每周期 >=3.2 网格间距，防止低画质和远景形成水面碎片/折线伪影。
+    if (len < (40 / (LOW_QUALITY ? 140 : 300)) * 3.2) continue;
     // 风向占主导，叠加少量横向涌浪；避免完全随机方向形成“沸腾的海面”。
     const crossSwell = i % 5 === 0;
     const ang = (crossSwell ? 1.32 : -0.43) + (rand() - 0.5) * (0.48 + t * 1.05);
@@ -398,7 +400,7 @@ void main(){
                  vnoise(pd2 + vec2(0.0,e)) - vnoise(pd2 - vec2(0.0,e))) / (2.0*e);
   vec2 capillary = vec2(sin(vW.x*13.2 + vW.z*5.3 + uTime*2.4),
                         sin(vW.z*15.6 - vW.x*4.1 - uTime*1.8));
-  float waveDetail = mix(0.13, 0.018, uIce) * (1.0 + 0.3*uSteam);
+  float waveDetail = mix(0.095, 0.015, uIce) * (1.0 + 0.24*uSteam);
   vec2 ng = (g1*0.52 + g2*0.18 + capillary*0.065) * waveDetail;
   vec3 N = normalize(vN + vec3(-ng.x, 0.0, -ng.y));
   float NdV = clamp(dot(N,V), 0.0, 1.0);
@@ -408,8 +410,9 @@ void main(){
   R.y = abs(R.y)*0.98 + 0.02;
   vec3 reflection = mountains(R, skyColor(R,uSun));
   float sunDot = max(dot(R,uSun),0.0);
-  float specular = pow(sunDot, mix(1050.0,480.0,uSteam))*2.8
-                 + pow(sunDot, mix(110.0,65.0,uSteam))*0.17;
+  float specular = pow(sunDot, mix(1050.0,480.0,uSteam))*1.7
+                 + pow(sunDot, mix(110.0,65.0,uSteam))*0.12
+                 + pow(sunDot,18.0)*0.035;
   float sparkleMask = 0.70 + 0.30*vnoise(vW.xz*8.0 - uTime*vec2(0.19,0.14));
   specular *= sparkleMask;
 
@@ -466,20 +469,23 @@ out vec4 outColor;
 ${NOISE}
 void main(){
   vec2 p = vW.xz;
-  vec3 w = worley(p*1.5);
-  float mask = smoothstep(0.52, 0.38, w.x);
+  vec3 w = worley(p*2.05);
+  float mask = smoothstep(0.50, 0.34, w.x);
   vec3 pcol = mix(vec3(0.50,0.45,0.38), vec3(0.66,0.62,0.55), hash1(vec2(w.z*7.1, w.z*1.3)));
   pcol = mix(pcol, vec3(0.38,0.33,0.30), step(0.75, hash1(vec2(w.z*13.7, w.z*2.9))));
   float bump = 1.0 - smoothstep(0.0, 0.55, w.x);
   vec3 sand = vec3(0.55,0.49,0.38)*(0.78 + 0.42*vnoise(p*8.0) + 0.18*vnoise(p*31.0));
-  vec3 alb = mix(sand, pcol*(0.45 + 0.75*bump), mask);
+  vec3 alb = mix(sand, pcol*(0.66 + 0.38*bump), mask*0.80);
 
-  float c1 = web(p*0.75 + vec2(uTime*0.13, uTime*0.09));
-  float c2 = web(p*1.35 + vec2(-uTime*0.11, uTime*0.15) + 4.7);
-  float raw = clamp(c1*0.6 + c2*0.6, 0.0, 1.0);
-  float ca = mix(pow(raw, 1.6), pow(raw, 3.0)*1.3, uIce);
+  // 轻微流场扭曲破除 Worley 重复网格，收敛焦散的面积和亮度。
+  vec2 warp = (vec2(vnoise(p*0.62 + uTime*vec2(0.06,0.04)),
+                    vnoise(p*0.62 + vec2(11.2,3.7) - uTime*vec2(0.04,0.05))) - 0.5)*0.32;
+  float c1 = web((p+warp)*0.92 + vec2(uTime*0.11, uTime*0.08));
+  float c2 = web((p-warp)*1.47 + vec2(-uTime*0.10, uTime*0.12)+4.7);
+  float raw = clamp(c1*0.52 + c2*0.48, 0.0, 1.0);
+  float ca = mix(pow(raw, 2.45), pow(raw, 3.1)*1.2, uIce);
   float caust = ca*(0.35 + 0.65*max(uSun.y, 0.0));
-  vec3 lit = alb*(0.42 + 0.58*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*2.4;
+  vec3 lit = alb*(0.48 + 0.50*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*1.08;
 
   vec3 V = normalize(uCam - vW);
   float dist = length(uCam - vW);
