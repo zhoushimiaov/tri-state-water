@@ -1144,6 +1144,9 @@ function render() {
 
 /* ================= 主循环 ================= */
 updateStateParams();
+// URL initial preset is not a phase transition: suppress first-frame shock ripples.
+icePrev = P.ice;
+steamPrev = P.steam;
 resize();
 let last = performance.now(), fpsAcc = 0, fpsN = 0;
 function frame(now) {
