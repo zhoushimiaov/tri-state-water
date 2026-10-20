@@ -19,156 +19,171 @@
   无依赖 · 无构建 · 单文件。直接用浏览器打开即可。
 -->
 <style>
-  :root{
-    --ink:#fafafa; --dim:#a3b1b8; --ink-deep:#171717;
-    --glass:rgba(10,12,14,.60); --line:rgba(255,255,255,.10);
-    --focus:hsla(212,100%,48%,1);
-    --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  :root {
+    color-scheme: dark;
+    --ink:#f4f7f7; --dim:#b8c8cb; --quiet:#8ea4aa;
+    --line:rgba(233,250,252,.14); --panel:rgba(8,25,31,.76);
+    --focus:#a7e7fa;
+    --font:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --accent:#88ebdb;
   }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  html,body{ width:100%; height:100%; overflow:hidden; background:#04141a;
-    font-family:var(--font); font-feature-settings:'liga';
-    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-  #gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
-
-  /* 键盘可访问性：统一焦点环（Vercel focus blue） */
-  :focus{ outline:none; }
-  :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
-
-  #title{ position:fixed; top:18px; left:22px; color:var(--ink); z-index:10; user-select:none;
-    text-shadow:0 1px 12px rgba(0,0,0,.6); pointer-events:none; }
-  #title b{ font-size:24px; font-weight:600; letter-spacing:-0.96px; }
-  #title span{ display:block; font-size:12px; font-weight:500; color:var(--dim); letter-spacing:.22em; margin-top:5px;
-    font-family:var(--mono); text-transform:uppercase; }
-
-  #hint{ position:fixed; top:20px; right:22px; z-index:10; color:var(--dim); font-size:13px; font-weight:400; line-height:2.0;
-    text-align:right; text-shadow:0 1px 8px rgba(0,0,0,.7); user-select:none; pointer-events:none; }
-  #hint kbd{ font:500 11px var(--mono); color:var(--ink); box-shadow:0 0 0 1px var(--line) inset; border-radius:4px; padding:1px 5px; }
-
-  /* —— 控制面板：深色玻璃 + 多层 shadow 堆叠（shadow-as-border 体系） —— */
-  #panel{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:10;
-    display:flex; align-items:center; gap:14px; padding:12px 16px;
-    width:max-content; max-width:calc(100vw - 24px);
-    background:var(--glass); border-radius:12px;
-    box-shadow:
-      rgba(255,255,255,0.10) 0px 0px 0px 1px,
-      rgba(255,255,255,0.05) 0px 0px 0px 1px inset,
-      rgba(0,0,0,0.32) 0px 4px 12px,
-      rgba(0,0,0,0.42) 0px 16px 32px -12px;
-    backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15);
+  * { box-sizing:border-box; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#071b24;
+    color:var(--ink); font-family:var(--font); -webkit-font-smoothing:antialiased; }
+  #gl { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none; }
+  body::after { content:''; position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg,rgba(3,20,28,.29),transparent 30%,transparent 78%,rgba(3,20,28,.10)); }
+  button,input { font:inherit; }
+  :focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
+  .hidden { display:none !important; }
+  #title { position:fixed; left:clamp(22px,3.4vw,58px); top:clamp(22px,4.3vh,48px);
+    z-index:5; max-width:min(440px,calc(100vw - 40px)); pointer-events:none; user-select:none;
+    filter:drop-shadow(0 2px 12px rgba(1,11,18,.5)); }
+  #title .eyebrow { display:flex; align-items:center; gap:12px; margin-bottom:14px;
+    color:#d0edf0; font:500 10px/1.3 var(--mono); letter-spacing:.17em; text-transform:uppercase; }
+  #title .eyebrow::before { content:''; width:25px; height:1px; background:var(--accent); }
+  #title b { display:block; font-size:clamp(29px,3vw,43px); line-height:1.06; font-weight:500;
+    letter-spacing:-.055em; }
+  #title span { display:block; margin-top:11px; color:#d1dee0; font-size:12px;
+    line-height:1.6; letter-spacing:.06em; }
+  #hint { position:fixed; right:clamp(22px,3.4vw,58px); top:clamp(24px,4.5vh,50px); z-index:5;
+    color:#d7e9eb; font-size:12px; font-weight:400; line-height:2;
+    text-align:right; text-shadow:0 2px 12px rgba(1,11,18,.65); user-select:none; pointer-events:none; }
+  #hint .hint-heading { font:500 10px/1.5 var(--mono); letter-spacing:.16em;
+    color:#effffc; margin-bottom:9px; }
+  #hint kbd { display:inline-block; font:500 10px/1.45 var(--mono); color:var(--ink);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.26); background:rgba(5,17,22,.4);
+    border-radius:4px; padding:2px 6px; margin-inline:2px; }
+  #panel { position:fixed; left:50%; bottom:clamp(14px,3.8vh,38px); transform:translateX(-50%);
+    z-index:10; display:grid; grid-template-columns:auto minmax(220px,1fr) auto;
+    align-items:center; gap:26px; width:min(890px,calc(100vw - 36px)); padding:19px 24px;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 22px 70px rgba(1,12,17,.33), inset 0 1px 0 rgba(255,255,255,.075);
+    backdrop-filter:blur(24px) saturate(1.22); -webkit-backdrop-filter:blur(24px) saturate(1.22);
     user-select:none; }
-  .preset{ appearance:none; border:0; background:rgba(255,255,255,.06); color:var(--ink);
-    font:500 14px/1.43 var(--font); padding:8px 14px; border-radius:6px; cursor:pointer; white-space:nowrap;
-    box-shadow:rgba(255,255,255,0.10) 0px 0px 0px 1px;
-    transition:transform .16s cubic-bezier(.34,1.56,.64,1), background .18s ease, color .18s ease, box-shadow .25s ease; }
-  .preset:hover{ background:rgba(255,255,255,.14); transform:translateY(-1px); }
-  .preset:active{ transform:translateY(1px) scale(.94); }
-  .preset.on{ background:var(--ink); color:var(--ink-deep);
-    box-shadow:rgba(255,255,255,0.9) 0px 0px 0px 1px, rgba(255,255,255,0.22) 0px 0px 18px; }
-
-  #sliderWrap{ display:flex; flex-direction:column; gap:6px; width:min(320px,38vw); }
-  /* 加大命中区（20px），轨道本身仍是 5px */
-  #slider{ -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
-  #slider:focus-visible{ outline-offset:4px; }
-  /* 渐变停靠点与真实温度刻度对齐：0°C = 19.35%，100°C = 73.1% */
-  #slider::-webkit-slider-runnable-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5.5px;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
-    transition:transform .15s ease; }
-  #slider:hover::-webkit-slider-thumb{ transform:scale(1.12); }
-  #slider:active::-webkit-slider-thumb{ transform:scale(1.28); }
-  #slider::-moz-range-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; border:none;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
-    transition:transform .15s ease; }
-  #slider:hover::-moz-range-thumb{ transform:scale(1.12); }
-  #slider:active::-moz-range-thumb{ transform:scale(1.28); }
-  /* 刻度标签按真实温度位置绝对定位，带小刻度线 */
-  #ticks{ position:relative; height:12px; color:var(--dim); font-size:10px; font-weight:500; letter-spacing:.02em;
-    font-family:var(--mono); font-variant-numeric:tabular-nums; }
-  #ticks span{ position:absolute; transform:translateX(-50%); white-space:nowrap; }
-  #ticks span::before{ content:''; position:absolute; left:50%; top:-6px; width:1px; height:3px;
-    background:var(--dim); opacity:.55; }
-  #ticks span:first-child{ left:0; transform:none; }
-  #ticks span:first-child::before{ left:3px; }
-  #ticks span:last-child{ right:0; transform:none; }
-  #ticks span:last-child::before{ left:auto; right:3px; }
-
-  /* 状态徽章：pill + 状态色圆点（色值经 --state 由 JS 驱动） */
-  #badge{ --state:#5fe8cf; display:flex; align-items:center; justify-content:center; gap:8px;
-    min-width:150px; font:500 13px/1 var(--font); color:var(--ink);
-    border-radius:9999px; padding:9px 14px; background:rgba(255,255,255,.05);
-    box-shadow:rgba(255,255,255,0.08) 0px 0px 0px 1px;
-    transition:box-shadow .4s ease; white-space:nowrap; }
-  #badge i{ width:7px; height:7px; border-radius:50%; background:var(--state);
-    box-shadow:0 0 8px var(--state); transition:background .4s ease, box-shadow .4s ease; }
-  #badge b{ font:600 13px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--state);
-    transition:color .4s ease; }
-  #badge span{ color:var(--ink); opacity:.85; }
-
-  #fps{ position:fixed; right:14px; bottom:14px; z-index:11; color:var(--dim); font-size:11px; display:none;
-    font-family:var(--mono); font-variant-numeric:tabular-nums; }
-  #fatal{ position:fixed; inset:0; z-index:99; display:none; place-items:center; background:#04141a; color:var(--dim);
-    font-size:15px; text-align:center; line-height:2; }
-  .hidden{ display:none !important; }
-
-  /* —— UI 编排：入场 stagger —— */
-  @keyframes riseIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes riseInC { from { opacity:0; transform:translate(-50%,22px); } to { opacity:1; transform:translate(-50%,0); } }
-  #title { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .25s backwards; }
-  #hint  { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .5s backwards; }
-  #panel { animation: riseInC .9s cubic-bezier(.18,.72,.22,1) .7s backwards; }
-
-  /* —— 面板显隐过渡（替代 H 键硬切） —— */
-  #title, #hint, #panel { transition: opacity .45s ease, transform .45s cubic-bezier(.5,0,.25,1); }
+  #panel::before { content:''; position:absolute; left:24px; right:24px; top:0;
+    height:1px; background:linear-gradient(90deg,transparent,rgba(237,255,255,.22),transparent);
+    pointer-events:none; }
+  .field-label { display:block; margin-bottom:12px; font:500 10px/1.3 var(--mono);
+    color:#b4cdd2; text-transform:uppercase; letter-spacing:.13em; }
+  .presetRow { display:flex; gap:5px; padding:4px; background:rgba(0,13,18,.36);
+    border:1px solid rgba(235,252,253,.09); border-radius:9px; }
+  .preset { border:0; background:transparent; color:#bed0d4; padding:9px 17px; min-height:37px;
+    border-radius:6px; cursor:pointer; white-space:nowrap; font-size:13px; font-weight:500;
+    transition:background .2s,color .2s,box-shadow .2s; }
+  .preset:hover { color:white; background:rgba(255,255,255,.09); }
+  .preset.on { color:#082126; background:#e2f8f5; box-shadow:0 1px 8px rgba(6,20,25,.24); }
+  #sliderWrap { min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .sliderTop { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .sliderTop .field-label { margin-bottom:0; }
+  #targetReading { color:#e2f7f5; font:500 13px/1.3 var(--mono);
+    font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+  #slider { appearance:none; -webkit-appearance:none; background:transparent; cursor:pointer;
+    width:100%; height:28px; margin:0; }
+  #slider::-webkit-slider-runnable-track { height:5px; border-radius:99px; background:linear-gradient(
+    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
+  #slider::-moz-range-track { height:5px; border-radius:99px; background:linear-gradient(
+    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
+  #slider::-webkit-slider-thumb { -webkit-appearance:none; width:17px; height:17px; margin-top:-6px;
+    border:3px solid #f1fbfb; border-radius:50%; background:#244850;
+    box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4);
+    transition:box-shadow .2s, transform .2s; }
+  #slider::-moz-range-thumb { width:11px; height:11px; border:3px solid #f1fbfb;
+    border-radius:50%; background:#244850; box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4); }
+  #slider:hover::-webkit-slider-thumb { transform:scale(1.1); box-shadow:0 0 0 5px rgba(224,250,246,.22); }
+  #ticks { position:relative; height:14px; color:#9db5ba; font:500 10px/1.4 var(--mono);
+    font-variant-numeric:tabular-nums; }
+  #ticks span { position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
+  #ticks span::before { content:''; position:absolute; height:4px; width:1px;
+    background:#9db5ba; opacity:.6; top:-6px; left:50%; }
+  #ticks span:first-child { left:0; transform:none; }
+  #ticks span:first-child::before { left:3px; }
+  #ticks span:last-child { right:0; transform:none; }
+  #ticks span:last-child::before { left:auto; right:3px; }
+  #badge { --state:#88ebdb; display:flex; align-items:center; gap:12px;
+    padding-left:24px; min-width:162px; border-left:1px solid var(--line); }
+  #badge i { display:block; flex:none; width:7px; height:7px; margin-top:17px; align-self:flex-start;
+    background:var(--state); border-radius:50%; box-shadow:0 0 14px var(--state); }
+  #badge .badgeCopy { display:grid; gap:3px; }
+  #badge small { font:500 10px/1.4 var(--mono); color:#acc5c9; letter-spacing:.1em; }
+  #badge b { color:#effefe; font:500 23px/1.15 var(--mono); letter-spacing:-.06em;
+    font-variant-numeric:tabular-nums; }
+  #badge span { color:var(--state); font-size:11px; font-weight:500; white-space:nowrap; }
+  #fps { position:fixed; right:18px; bottom:8px; z-index:11; color:#d3e8e9;
+    font:500 10px var(--mono); display:none; }
+  #fatal { position:fixed; inset:0; z-index:99; display:none; place-items:center;
+    padding:24px; background:#071b24; color:#d5e8ea; text-align:center; font-size:15px; line-height:2; }
+  #title,#hint,#panel { transition:opacity .32s ease,translate .32s ease; }
   .ui-off { opacity:0 !important; pointer-events:none !important; }
-  #panel.ui-off { transform: translate(-50%, 26px); }
-  #title.ui-off { transform: translateY(-14px); }
-  #hint.ui-off  { transform: translateY(-14px); }
-
-  /* —— 弹性微交互（transition 已在组件定义处声明） —— */
-  @keyframes pop { 0% { transform:scale(.88); } 55% { transform:scale(1.1); } 100% { transform:scale(1); } }
-  .preset.pop { animation: pop .38s cubic-bezier(.34,1.56,.64,1); }
-  @keyframes badgePop { 0% { transform:scale(.9); } 60% { transform:scale(1.07); } 100% { transform:scale(1); } }
-  #badge.pop { animation: badgePop .42s cubic-bezier(.34,1.56,.64,1); }
-
-  /* —— 窄屏：面板换行，滑杆独占一行 —— */
-  @media (max-width:640px){
-    #hint{ display:none; }
-    #panel{ flex-wrap:wrap; justify-content:center; gap:8px 10px; padding:10px 12px; bottom:12px; }
-    #sliderWrap{ order:5; width:100%; }
-    #badge{ min-width:0; padding:8px 12px; }
+  #panel.ui-off { translate:0 20px; }
+  #title.ui-off,#hint.ui-off { translate:0 -10px; }
+  @media (max-width:860px) {
+    #panel { grid-template-columns:minmax(0,1fr) auto; gap:16px 24px; max-width:660px; padding:17px 20px; }
+    #sliderWrap { grid-column:1 / -1; grid-row:2; }
+    #badge { grid-column:2; grid-row:1; }
   }
-  /* —— 尊重系统的减弱动效偏好 —— */
-  @media (prefers-reduced-motion:reduce){
-    *, *::before, *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
-  }</style>
+  @media (max-width:640px) {
+    #title { left:22px; top:23px; }
+    #title b { font-size:31px; }
+    #title .eyebrow { font-size:9px; margin-bottom:10px; }
+    #title span { font-size:11px; }
+    #hint { display:none; }
+    #panel { bottom:max(12px,env(safe-area-inset-bottom)); width:calc(100vw - 24px);
+      padding:14px 15px; gap:14px 8px; }
+    .preset { padding:9px 11px; min-height:36px; }
+    .field-label { font-size:9px; margin-bottom:9px; }
+    #badge { min-width:0; padding-left:13px; gap:8px; }
+    #badge b { font-size:19px; }
+    #badge small { font-size:9px; }
+    #badge i { display:none; }
+  }
+  @media (max-width:370px) {
+    #panel { grid-template-columns:1fr; gap:15px; }
+    #badge { grid-column:1; grid-row:2; flex-direction:row; padding:0; border:0; }
+    #badge .badgeCopy { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+    #badge small { display:none; }
+    #sliderWrap { grid-column:1; grid-row:3; }
+    .presetRow { width:max-content; }
+    #ticks span:nth-child(2),#ticks span:nth-child(3) { font-size:9px; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+  }
+</style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 
-<div id="title"><b>Tri-State Water</b><span>三态之水 · WebGL2</span></div>
-<div id="hint">拖动 环视 · 滚轮 缩放<br>点击水面 荡开涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换状态 &nbsp;<kbd>H</kbd> 隐藏面板</div>
+<header id="title" aria-label="项目标题"><div class="eyebrow">A STUDY OF MATTER · 001</div><b>Tri-State Water</b><span>三态之水 / 温度驱动的实时材质实验</span></header>
+<aside id="hint" aria-label="操作说明"><div class="hint-heading">INTERACTIVE MATERIAL STUDY / WEBGL2</div>拖动环视 &nbsp;·&nbsp; 滚轮缩放<br>轻触水面生成涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换相态 &nbsp;<kbd>H</kbd> 隐藏界面</aside>
 
-<div id="panel" role="group" aria-label="温度控制">
-  <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">❄️ 冰</button>
-  <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">💧 水</button>
-  <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">♨️ 汽</button>
-  <div id="sliderWrap">
-    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
-    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0°C 冰点</span><span style="left:73.1%">100°C 沸点</span><span>150°</span></div>
+<section id="panel" role="group" aria-label="水体相态与温度控制">
+  <div class="panelLead">
+    <label class="field-label">相态 / PHASE</label>
+    <div class="presetRow" role="group" aria-label="温度预设">
+      <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">冰</button>
+      <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">水</button>
+      <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">汽</button>
+    </div>
   </div>
-  <div id="badge" role="status" aria-live="polite"><i></i><b>24°C</b><span>液态 · 水</span></div>
-</div>
+  <div id="sliderWrap">
+    <div class="sliderTop"><label class="field-label" for="slider">温度 / TEMPERATURE</label><output id="targetReading" for="slider">24°C</output></div>
+    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
+    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0° 冰点</span><span style="left:73.1%">100° 沸点</span><span>150°</span></div>
+  </div>
+  <div id="badge" aria-label="当前水体状态">
+    <i aria-hidden="true"></i>
+    <div class="badgeCopy"><small>CURRENT STATE</small><b>24°C</b><span role="status" aria-live="polite">液态 · 水</span></div>
+  </div>
+</section>
 <div id="fps"></div>
 <div id="fatal"><div>此演示需要支持 <b>WebGL2</b> 的浏览器。<br>请使用较新的 Chrome / Edge / Firefox / Safari 打开。</div></div>
 
 <script>
 'use strict';
 window.__frames = 0;
+window.__suspendRendering = false; // 截图/浏览器测试可暂停 GPU 绘制，保留最后一帧
 window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
 /* ================= 基础工具 ================= */
 const $ = s => document.querySelector(s);
@@ -179,6 +194,10 @@ const canvas = $('#gl');
 const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true });
 if (!gl) { $('#fatal').style.display = 'grid'; throw new Error('no webgl2'); }
 const extHDR = gl.getExtension('EXT_color_buffer_float');
+const floatLinear = !!gl.getExtension('OES_texture_float_linear');
+// Half-float NEAREST upscaling accentuates distant wave aliasing; prefer LDR linear filtering
+// on drivers without floating-point linear texture filtering.
+const useHDR = !!extHDR && floatLinear;
 
 // WebGL 上下文丢失保护：提示并在恢复后自动重载
 canvas.addEventListener('webglcontextlost', e => {
@@ -190,7 +209,7 @@ canvas.addEventListener('webglcontextlost', e => {
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 
 // —— UI 元素引用（提前到 URL 预置之前） ——
-const slider = $('#slider'), badge = $('#badge');
+const slider = $('#slider'), badge = $('#badge'), targetReading = $('#targetReading');
 const badgeT = badge.querySelector('b'), badgeS = badge.querySelector('span');
 const presetBtns = [...document.querySelectorAll('.preset')];
 function markPresets(near) {
@@ -202,6 +221,9 @@ function markPresets(near) {
 }
 
 const params = new URLSearchParams(location.search);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const LOW_QUALITY = params.get('quality') === 'low' ||
+  (window.matchMedia('(max-width: 640px)').matches && (navigator.hardwareConcurrency || 4) <= 4);
 const DEBUG = params.has('debug');
 if (DEBUG) $('#fps').style.display = 'block';
 
@@ -268,14 +290,14 @@ vec3 worley(vec2 p){
 float web(vec2 p){ vec3 w = worley(p); return 1.0 - smoothstep(0.02, 0.16, w.y - w.x); }
 vec3 skyColor(vec3 rd, vec3 sun){
   float y = max(rd.y, 0.0);
-  vec3 zen  = vec3(0.16, 0.42, 0.78);          // 天顶：饱和蓝，不再灰蒙
-  vec3 hor  = vec3(0.78, 0.90, 0.98);          // 地平线：明亮暖白
-  vec3 c = mix(hor, zen, pow(y, 0.62));
+  vec3 zen = vec3(0.13, 0.34, 0.52);           // 自然青蓝的天顶，避免过度饱和
+  vec3 hor = vec3(0.66, 0.85, 0.91);           // 空气散射后的浅青灰地平线
+  vec3 c = mix(hor, zen, pow(y, 0.73));
   // 近地平线的暖色微光（阳光散射）
-  c = mix(c, vec3(0.98, 0.94, 0.86), (1.0 - smoothstep(0.0, 0.35, y))*0.28);
+  c = mix(c, vec3(0.96, 0.91, 0.83), (1.0 - smoothstep(0.0, 0.35, y))*0.19);
   float sd = max(dot(rd,sun), 0.0);
-  c += vec3(1.0,0.83,0.58)*pow(sd,8.0)*0.30;
-  c += vec3(1.0,0.90,0.72)*pow(sd,320.0)*5.0;
+  c += vec3(1.0,0.87,0.70)*pow(sd,8.0)*0.18;
+  c += vec3(1.0,0.93,0.84)*pow(sd,320.0)*2.0;
   return c;
 }
 // 远山：两层山脊剪影（大气透视，越远越淡）
@@ -292,12 +314,12 @@ vec3 mountains(vec3 rd, vec3 sky){
            + 0.020*sin(az*2.2 + 5.2);
   vec3 col = sky;
   if(y < r1){                                    // 远山：雾蓝
-    float depth = smoothstep(r1, r1 - 0.02, y);
+    float depth = 1.0 - smoothstep(r1 - 0.02, r1, y);
     vec3 mc = mix(vec3(0.52, 0.66, 0.82), vec3(0.30, 0.44, 0.62), smoothstep(0.0, 0.06, y));
     col = mix(col, mc, depth*0.85);
   }
   if(y < r2){                                    // 近山：深青蓝
-    float depth = smoothstep(r2, r2 - 0.025, y);
+    float depth = 1.0 - smoothstep(r2 - 0.025, r2, y);
     vec3 mc = mix(vec3(0.30, 0.42, 0.56), vec3(0.13, 0.22, 0.34), smoothstep(0.0, 0.08, y));
     col = mix(col, mc, depth*0.94);
   }
@@ -312,12 +334,17 @@ vec3 mountains(vec3 rd, vec3 sky){
 const waveDef = [];
 {
   let seed = 7, rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 22; i++) {
-    const t = i / 21;
-    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);   // 波长 7m → ~0.3m
-    const ang = rand() * Math.PI * 2;
+  const waveCount = LOW_QUALITY ? 14 : 22;
+  for (let i = 0; i < waveCount; i++) {
+    const t = i / (waveCount - 1);
+    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);
+    // 保证每周期 >=3.2 网格间距，防止低画质和远景形成水面碎片/折线伪影。
+    if (len < (40 / (LOW_QUALITY ? 140 : 300)) * 3.2) continue;
+    // 风向占主导，叠加少量横向涌浪；避免完全随机方向形成“沸腾的海面”。
+    const crossSwell = i % 5 === 0;
+    const ang = (crossSwell ? 1.32 : -0.43) + (rand() - 0.5) * (0.48 + t * 1.05);
     const k = 2 * Math.PI / len;
-    const amp = len * 0.014 * (0.7 + rand() * 0.6);
+    const amp = len * (0.010 + rand() * 0.005) * (crossSwell ? 0.55 : 1.0);
     const w = Math.sqrt(9.8 * k) * (0.92 + rand() * 0.16);                    // 深水色散关系
     waveDef.push({ dx: Math.cos(ang), dz: Math.sin(ang), k, amp, w, ph: rand() * 6.28 });
   }
@@ -330,6 +357,7 @@ const WAVE_CODE = waveDef.map(v =>
 const VS_WATER = `
 uniform mat4 uVP;
 uniform float uTime, uWaveAmp, uSteam;
+uniform vec3 uCam;
 uniform vec4 uRipple[24];
 layout(location = 0) in vec3 aPos;
 out vec3 vW; out vec3 vN; out float vH;
@@ -337,9 +365,14 @@ void main(){
   vec2 p = aPos.xz;
   float h = 0.0; vec2 grad = vec2(0.0);
   ${WAVE_CODE}
-  h += uSteam*0.016*sin(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3);
-  grad += uSteam*0.016*vec2(6.7*cos(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3),
-                            -7.9*sin(p.x*6.7+uTime*8.5)*cos(p.y*7.9-uTime*7.3));
+  // Long-lived boiling ripples use wavelengths that the grid can actually resolve.
+  // Derivative sign matches d/dz sin(p.y*k - time): positive k, not negative.
+  float boilAmp = uSteam*0.009;
+  float boilA = p.x*3.6 + uTime*5.2;
+  float boilB = p.y*4.4 - uTime*4.8;
+  h += boilAmp*sin(boilA)*sin(boilB);
+  grad += boilAmp*vec2(3.6*cos(boilA)*sin(boilB),
+                       4.4*sin(boilA)*cos(boilB));
   for(int i=0;i<24;i++){
     vec4 r = uRipple[i];
     float age = uTime - r.z;
@@ -353,7 +386,10 @@ void main(){
       grad += (dhdd/d)*dv;
     }
   }
-  h *= uWaveAmp; grad *= uWaveAmp;
+  // Fade distant geometry displacement to avoid undersampling at grazing angles.
+  float farFade = mix(0.14, 1.0, 1.0-smoothstep(12.0, 29.0, length(p-uCam.xz)));
+  h *= uWaveAmp*farFade;
+  grad *= uWaveAmp*farFade;
   vec3 wp = vec3(p.x, h, p.y);
   vW = wp; vN = vec3(-grad.x, 1.0, -grad.y); vH = h;
   gl_Position = uVP*vec4(wp, 1.0);
@@ -362,59 +398,78 @@ void main(){
 const FS_WATER = `
 precision highp float;
 uniform vec3 uCam, uSun, uWaterCol, uDeep;
-uniform float uTime, uIce, uSteam, uDeepIce;
+uniform float uTime, uIce, uSteam, uDeepIce, uWarm;
 in vec3 vW; in vec3 vN; in float vH;
 out vec4 outColor;
 ${NOISE}
 void main(){
   vec3 V = normalize(uCam - vW);
-  float e = 0.10;
-  vec2 pd = vW.xz*1.9 + uTime*vec2(0.22,0.17);
-  vec2 g1 = vec2(vnoise(pd+vec2(e,0.0))-vnoise(pd-vec2(e,0.0)),
-                 vnoise(pd+vec2(0.0,e))-vnoise(pd-vec2(0.0,e)))/(2.0*e);
-  vec2 pd2 = vW.xz*5.3 - uTime*vec2(0.31,0.24);
-  vec2 g2 = vec2(vnoise(pd2+vec2(e,0.0))-vnoise(pd2-vec2(e,0.0)),
-                 vnoise(pd2+vec2(0.0,e))-vnoise(pd2-vec2(0.0,e)))/(2.0*e);
-  float detail = mix(0.16, 0.05, uIce)*(1.0 + 0.7*uSteam);
-  vec3 N = normalize(vN + vec3(-g1.x*0.5-g2.x*0.25, 0.0, -g1.y*0.5-g2.y*0.25)*detail);
-
-  float NdV = max(dot(N, V), 0.0);
-  float F = 0.02 + 0.98*pow(1.0-NdV, 5.0);
-  vec3 R = reflect(-V, N);
+  // 以两组反向平流噪声构建波纹微法线；近场微细、远场不出现规则塑料纹。
+  const float e = 0.12;
+  vec2 pd = vW.xz * 1.65 + uTime * vec2(0.17, 0.10);
+  vec2 g1 = vec2(vnoise(pd + vec2(e,0.0)) - vnoise(pd - vec2(e,0.0)),
+                 vnoise(pd + vec2(0.0,e)) - vnoise(pd - vec2(0.0,e))) / (2.0*e);
+  vec2 pd2 = vW.xz * 5.8 - uTime * vec2(0.27, 0.19);
+  vec2 g2 = vec2(vnoise(pd2 + vec2(e,0.0)) - vnoise(pd2 - vec2(e,0.0)),
+                 vnoise(pd2 + vec2(0.0,e)) - vnoise(pd2 - vec2(0.0,e))) / (2.0*e);
+  vec2 capillary = vec2(sin(vW.x*13.2 + vW.z*5.3 + uTime*2.4),
+                        sin(vW.z*15.6 - vW.x*4.1 - uTime*1.8));
+  float waveDetail = mix(0.095, 0.015, uIce) * (1.0 + 0.24*uSteam);
+  vec2 ng = (g1*0.52 + g2*0.18 + capillary*0.065) * waveDetail;
+  vec3 N = normalize(vN + vec3(-ng.x, 0.0, -ng.y));
+  float NdV = clamp(dot(N,V), 0.0, 1.0);
+  // 水的 F0 ≈ 0.0204（空气/水 IOR 1.0 / 1.333），Schlick 随视角增强掠射反射。
+  float fresnel = 0.0204 + 0.9796*pow(1.0-NdV,5.0);
+  vec3 R = reflect(-V,N);
   R.y = abs(R.y)*0.98 + 0.02;
-  vec3 refl = mountains(R, skyColor(R, uSun));
-  float cosSun = max(dot(R, uSun), 0.0);
-  float spec = pow(cosSun, 720.0)*3.5 + pow(cosSun, 64.0)*0.18;
-  float crest = clamp(vH*1.6 + 0.45, 0.0, 1.0);
-  vec3 sss = uWaterCol*(0.20 + 0.55*crest)*0.55;
+  vec3 reflection = mountains(R, skyColor(R,uSun));
+  float sunDot = max(dot(R,uSun),0.0);
+  // Screen-space filtered highlight prevents small far-field triangles from flashing.
+  float highlightFootprint = max(fwidth(sunDot), 0.0001);
+  float sharpness = mix(1050.0, 480.0, uSteam) / (1.0 + highlightFootprint*280.0);
+  float specular = pow(sunDot, sharpness)*1.35/(1.0 + highlightFootprint*25.0)
+                 + pow(sunDot, mix(110.0,65.0,uSteam))*0.12
+                 + pow(sunDot,18.0)*0.028;
+  float sparkleMask = 0.70 + 0.30*vnoise(vW.xz*8.0 - uTime*vec2(0.19,0.14));
+  specular *= sparkleMask;
 
-  vec3 colW = refl*F + vec3(1.0,0.92,0.75)*spec + sss*(1.0-F);
-  float aW = F;
+  // 水柱透射/体散射近似：保留海床细节，随视线斜率自然增加厚度。
+  float path = 2.35 / clamp(V.y,0.20,1.0);
+  float opticalBody = clamp(1.0-exp(-path*(0.14 + uWarm*0.045 + uSteam*0.07)),0.0,0.77);
+  float crest = smoothstep(-0.12,0.17,vH);
+  vec3 scattered = mix(uWaterCol,uDeep,0.23) * (0.75 + 0.20*crest);
+  float alpha = fresnel + (1.0-fresnel)*opticalBody;
+  // 对 gl.blendFunc(ONE,ONE_MINUS_SRC_ALPHA) 输出预乘透明度。
+  vec3 col = reflection*fresnel
+           + scattered*(1.0-fresnel)*opticalBody
+           + vec3(1.0,0.91,0.74)*specular;
 
-  vec3 col = colW; float alpha = aW;
   if(uIce > 0.001){
-    vec3 w2 = worley(vW.xz*1.35 + 13.7);
-    float cracks = 1.0 - smoothstep(0.015, 0.13, w2.y - w2.x);
-    float frost = fbm(vW.xz*3.1 + 5.0);
-    vec3 iceCol = vec3(0.58,0.78,0.88)*(0.62 + 0.5*frost);
-    iceCol += vec3(0.95,0.99,1.0)*cracks*(0.35 + 0.65*frost)*(1.0 + 0.9*uDeepIce);
-    iceCol = mix(iceCol, vec3(0.80,0.89,0.94)*(0.68 + 0.42*frost), uDeepIce*0.75);
-    float specIce = pow(max(dot(R, uSun), 0.0), 900.0)*0.9;
-    vec2 cellId = floor(vW.xz*26.0);
-    vec2 cellUv = fract(vW.xz*26.0);
-    vec2 sp = hash2(cellId + 3.1);
-    float tw = step(0.995, hash1(cellId + floor(uTime*4.0)))*smoothstep(0.10, 0.0, length(cellUv - sp));
-    vec3 shade = iceCol*(0.55 + 0.45*max(uSun.y,0.0)) + vec3(0.85,0.92,1.0)*specIce + vec3(1.0)*tw*1.2*frost;
-    float aI = clamp(F + 0.55 + uDeepIce*0.35, 0.0, 0.985);
-    col = mix(col, shade*aI, uIce);
-    alpha = mix(alpha, aI, uIce);
+    vec3 cell = worley(vW.xz*1.35+13.7);
+    float cracks = 1.0-smoothstep(0.02,0.12,cell.y-cell.x);
+    float frost = fbm(vW.xz*3.1+5.0);
+    vec3 iceCol = vec3(0.59,0.76,0.84)*(0.68+0.44*frost);
+    iceCol *= 1.0 - mix(0.30,0.47,uDeepIce)*cracks;
+    iceCol += vec3(0.79,0.92,0.99)*cracks*0.07;
+    iceCol = mix(iceCol,vec3(0.78,0.88,0.92)*(0.69+0.38*frost),uDeepIce*0.74);
+    float iceSun = pow(sunDot,950.0)*0.62;
+    vec2 cellId = floor(vW.xz*26.0), cellUV = fract(vW.xz*26.0);
+    float tw = step(0.996,hash1(cellId+floor(uTime*3.0)))*
+               (1.0-smoothstep(0.0,0.12,length(cellUV-hash2(cellId+3.1))));
+    vec3 iceLight = iceCol*(0.67+0.28*max(uSun.y,0.0))
+                  + vec3(0.85,0.94,1.0)*iceSun
+                  + vec3(1.0)*tw*0.75*frost;
+    float iceAlpha = clamp(fresnel+0.56+uDeepIce*0.34,0.0,0.985);
+    col = mix(col,iceLight*iceAlpha,uIce);
+    alpha = mix(alpha,iceAlpha,uIce);
   }
-
-  float dist = length(uCam - vW);
-  float fog = 1.0 - exp(-dist*0.055);
-  col = mix(col, uDeep, fog);
-  alpha = mix(alpha, 1.0, fog*0.95);
-  outColor = vec4(col, alpha);
+  float dist = length(uCam-vW);
+  float fog = 1.0-exp(-dist*0.045);
+  float fogOpacity = fog*0.93;
+  // Premultiplied layer-over math; color and alpha use the same fog opacity.
+  col = col*(1.0-fogOpacity) + uDeep*fogOpacity;
+  alpha = alpha*(1.0-fogOpacity) + fogOpacity;
+  outColor = vec4(col,alpha);
 }`;
 
 // —— 海床：卵石 + 焦散 + 水体吸收
@@ -433,20 +488,23 @@ out vec4 outColor;
 ${NOISE}
 void main(){
   vec2 p = vW.xz;
-  vec3 w = worley(p*1.5);
-  float mask = smoothstep(0.52, 0.38, w.x);
+  vec3 w = worley(p*2.05);
+  float mask = 1.0 - smoothstep(0.34, 0.50, w.x);
   vec3 pcol = mix(vec3(0.50,0.45,0.38), vec3(0.66,0.62,0.55), hash1(vec2(w.z*7.1, w.z*1.3)));
   pcol = mix(pcol, vec3(0.38,0.33,0.30), step(0.75, hash1(vec2(w.z*13.7, w.z*2.9))));
   float bump = 1.0 - smoothstep(0.0, 0.55, w.x);
   vec3 sand = vec3(0.55,0.49,0.38)*(0.78 + 0.42*vnoise(p*8.0) + 0.18*vnoise(p*31.0));
-  vec3 alb = mix(sand, pcol*(0.45 + 0.75*bump), mask);
+  vec3 alb = mix(sand, pcol*(0.66 + 0.38*bump), mask*0.80);
 
-  float c1 = web(p*0.75 + vec2(uTime*0.13, uTime*0.09));
-  float c2 = web(p*1.35 + vec2(-uTime*0.11, uTime*0.15) + 4.7);
-  float raw = clamp(c1*0.6 + c2*0.6, 0.0, 1.0);
-  float ca = mix(pow(raw, 1.6), pow(raw, 3.0)*1.3, uIce);
+  // 轻微流场扭曲破除 Worley 重复网格，收敛焦散的面积和亮度。
+  vec2 warp = (vec2(vnoise(p*0.62 + uTime*vec2(0.06,0.04)),
+                    vnoise(p*0.62 + vec2(11.2,3.7) - uTime*vec2(0.04,0.05))) - 0.5)*0.32;
+  float c1 = web((p+warp)*0.92 + vec2(uTime*0.11, uTime*0.08));
+  float c2 = web((p-warp)*1.47 + vec2(-uTime*0.10, uTime*0.12)+4.7);
+  float raw = clamp(c1*0.52 + c2*0.48, 0.0, 1.0);
+  float ca = mix(pow(raw, 2.45), pow(raw, 3.1)*1.2, uIce);
   float caust = ca*(0.35 + 0.65*max(uSun.y, 0.0));
-  vec3 lit = alb*(0.42 + 0.58*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*2.4;
+  vec3 lit = alb*(0.48 + 0.50*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*1.08;
 
   vec3 V = normalize(uCam - vW);
   float dist = length(uCam - vW);
@@ -572,7 +630,7 @@ ${NOISE}
 void main(){
   vec2 uv = vUv;
   uv += uShakeDir*uShake;
-  float shimmerMask = smoothstep(1.0, 0.15, uv.y);
+  float shimmerMask = 1.0 - smoothstep(0.15, 1.0, uv.y);
   vec2 so = vec2(vnoise(uv*vec2(55.0,30.0) + uTime*vec2(2.0,4.0)),
                  vnoise(uv*vec2(50.0,28.0) - uTime*vec2(2.4,3.2))) - 0.5;
   uv += so*0.007*uSteam*shimmerMask;
@@ -592,16 +650,16 @@ void main(){
   if(uSunVis > 0.001){
     vec2 dir = uSunUV - uv;
     vec3 acc = vec3(0.0);
-    for(int i=0;i<24;i++){
-      float t = float(i)/23.0;
+    for(int i=0;i<12;i++){
+      float t = float(i)/11.0;
       acc += max(texture(uTex, uv + dir*t*0.6).rgb - thr, 0.0)*(1.0-t);
     }
-    col += acc/24.0*1.6*uSunVis;
+    col += acc/12.0*1.32*uSunVis;
     vec3 s2 = vec3(0.0);
-    for(int i=-10;i<=10;i++){
-      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.012, 0.0)).rgb - thr, 0.0);
+    for(int i=-3;i<=3;i++){
+      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.027, 0.0)).rgb - thr, 0.0);
     }
-    col += s2/21.0*0.5*uSunVis;
+    col += s2/7.0*0.28*uSunVis;
   }
 
   col *= 1.05;
@@ -610,7 +668,7 @@ void main(){
   vec2 q = vUv - 0.5;
   float vig = 1.0 - (0.45 - 0.05*uIdle)*dot(q,q);
   col *= vig;
-  float grain = (hash1(gl_FragCoord.xy + uTime) - 0.5)*(0.012 + 0.008*uIdle);
+  float grain = (hash1(gl_FragCoord.xy + floor(uTime*12.0)) - 0.5)*(0.005 + 0.002*uIdle);
   col += grain;
   outColor = vec4(col, 1.0);
 }`;
@@ -658,7 +716,7 @@ function attrib(loc, data, size, stride = 0, offset = 0) {
 }
 // 水面网格
 const waterVAO = (() => {
-  const N = 300, half = 20;
+  const N = LOW_QUALITY ? 140 : 300, half = 20;
   const verts = [], idx = [];
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++)
     verts.push(-half + 40 * i / N, 0, -half + 40 * j / N);
@@ -719,26 +777,40 @@ const snowVAO = (() => {
 
 /* ================= 场景 FBO ================= */
 let sceneFBO = null, fboW = 0, fboH = 0;
-const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-let resAdj = 1.0;
+let dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
+let resAdj = LOW_QUALITY ? 0.7 : 1.0;
 function makeFBO(w, h) {
-  if (sceneFBO) { gl.deleteTexture(sceneFBO.tex); gl.deleteFramebuffer(sceneFBO.fb); }
+  if (sceneFBO) {
+    gl.deleteTexture(sceneFBO.tex);
+    gl.deleteRenderbuffer(sceneFBO.depth);
+    gl.deleteFramebuffer(sceneFBO.fb);
+  }
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  if (extHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  if (useHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
   else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const filter = gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   const fb = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  // 离屏目标必须有深度缓冲，否则海床、水面与粒子的遮挡测试失效。
+  const depth = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  sceneFBO = { tex, fb };
+  if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Scene framebuffer incomplete: ' + status);
+  sceneFBO = { tex, fb, depth };
   fboW = w; fboH = h;
 }
 function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
   const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
   const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -771,11 +843,17 @@ let lastActive = 0;                     // 上次交互的 simTime
   if (s === 'ice') targetTemp = dispTemp = -36;
   else if (s === 'steam') targetTemp = dispTemp = 130;
   else if (s === 'water') targetTemp = dispTemp = 24;
-  if (s) {
-    slider.value = targetTemp;
-    markPresets(targetTemp);
+  else if (params.has('temp')) {
+    const custom = Number(params.get('temp'));
+    if (Number.isFinite(custom)) targetTemp = dispTemp = clamp(custom,-36,150);
   }
-  if (params.get('ui') === '0') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('hidden'));
+  slider.value = String(targetTemp);
+  targetReading.textContent = Math.round(targetTemp) + '°C';
+  markPresets([-36,24,130].includes(targetTemp) ? targetTemp : NaN);
+  if (params.get('ui') === '0') {
+    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('ui-off'));
+    $('#panel').inert = true;
+  }
 }
 
 // 涟漪槽
@@ -802,7 +880,7 @@ function updateStateParams() {
   let deep = mix3([0.010, 0.085, 0.110], [0.025, 0.150, 0.160], clamp(warm * 0.8 + steam * 0.4, 0, 1));
   deep = mix3(deep, [0.040, 0.190, 0.220], ice);
   let waterCol = mix3([0.040, 0.300, 0.330], [0.070, 0.360, 0.330], warm);
-  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce), deep, waterCol };
+  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce) * (1 - 0.16 * steam), deep, waterCol };
 }
 
 /* ================= 输入 ================= */
@@ -846,8 +924,8 @@ canvas.addEventListener('pointerup', e => {
       if (Math.abs(px) < 13 && Math.abs(pz) < 13) {
         addRipple(px, pz, 0.5 + Math.random() * 0.12);   // 加强涟漪
         // —— 打击感：轻微色差 + 震动 ——
-        aberr = Math.max(aberr, 0.010);
-        shake = Math.max(shake, 0.0035);
+        aberr = Math.max(aberr, reducedMotion.matches ? 0 : 0.005);
+        shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0015);
         shakeAng = Math.random() * Math.PI * 2; shakeFreq = 26;
       }
     }
@@ -867,10 +945,12 @@ presetBtns.forEach(b => b.addEventListener('click', () => setTemp(+b.dataset.t, 
 function setTemp(t, fromPreset) {
   targetTemp = t;
   lastActive = simTime;
-  // 地址栏同步：预设写入 ?state=，滑杆自由值则移除该参数（可分享当前状态）
+  targetReading.textContent = Math.round(t) + '°C';
+  // 预设分享相态，自由温度写入 temp，刷新或分享链接均能复现。
   const st = { '-36': 'ice', '24': 'water', '130': 'steam' }[String(t)];
   const url = new URL(location.href);
-  if (st) url.searchParams.set('state', st); else url.searchParams.delete('state');
+  if (st) { url.searchParams.set('state', st); url.searchParams.delete('temp'); }
+  else { url.searchParams.delete('state'); url.searchParams.set('temp', String(t)); }
   history.replaceState(null, '', url);
   if (fromPreset) {
     slider.value = t;
@@ -884,7 +964,14 @@ window.addEventListener('keydown', e => {
   if (e.key === '1') setTemp(-36, true);
   if (e.key === '2') setTemp(24, true);
   if (e.key === '3') setTemp(130, true);
-  if (e.key === 'h' || e.key === 'H') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off'));
+  if (e.key === 'h' || e.key === 'H') {
+    const hidden = !$('#panel').classList.contains('ui-off');
+    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off', hidden));
+    $('#panel').inert = hidden; // 已隐藏的控件也退出键盘 Tab 顺序
+    const url = new URL(location.href);
+    if (hidden) url.searchParams.set('ui', '0'); else url.searchParams.delete('ui');
+    history.replaceState(null, '', url);
+  }
 });
 
 let lastBadge = '', lastPhase = '', lastNear = null;
@@ -908,8 +995,8 @@ function updateUI() {
     lastPhase = name;
     badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
   }
-  const near = [ -36, 24, 130 ].reduce((a, b) => Math.abs(b - targetTemp) < Math.abs(a - targetTemp) ? b : a);
-  if (near !== lastNear) { lastNear = near; markPresets(near); }
+  const exactPreset = [-36,24,130].includes(targetTemp) ? targetTemp : 'custom';
+  if (exactPreset !== lastNear) { lastNear = exactPreset; markPresets(exactPreset); }
 }
 
 /* ================= 渲染 ================= */
@@ -940,7 +1027,7 @@ function render() {
   const roll = clamp(yawV * 0.045, -0.05, 0.05);
   const B = rollBasis(camBasis(yaw, pitch + leanP), roll);
   const asp = canvas.width / canvas.height;
-  const view = m4View(CAM_POS, B);
+  const view = m4View(camPos, B);
   const proj = m4Persp(FOV, asp, 0.1, 120);
   const VP = m4Mul(proj, view);
 
@@ -999,6 +1086,7 @@ function render() {
   gl.uniform1f(U(progWater, 'uSteam'), P.steam);
   gl.uniform1f(U(progWater, 'uIce'), P.ice);
   gl.uniform1f(U(progWater, 'uDeepIce'), P.deepIce);
+  gl.uniform1f(U(progWater, 'uWarm'), P.warm);
   gl.uniform3f(U(progWater, 'uWaterCol'), P.waterCol[0], P.waterCol[1], P.waterCol[2]);
   gl.uniform3f(U(progWater, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
   gl.uniform4fv(U(progWater, 'uRipple'), ripples);
@@ -1044,7 +1132,7 @@ function render() {
   gl.uniform1f(U(progPost, 'uSteam'), P.steam);
   gl.uniform2f(U(progPost, 'uSunUV'), sunUV[0], sunUV[1]);
   gl.uniform1f(U(progPost, 'uSunVis'), sunVis);
-  gl.uniform1f(U(progPost, 'uHdr'), extHDR ? 1 : 0);
+  gl.uniform1f(U(progPost, 'uHdr'), useHDR ? 1 : 0);
   gl.uniform1f(U(progPost, 'uFlash'), flash);
   gl.uniform1f(U(progPost, 'uAberr'), aberr);
   gl.uniform1f(U(progPost, 'uShake'), shake * Math.sin(shakeAng));
@@ -1056,6 +1144,9 @@ function render() {
 
 /* ================= 主循环 ================= */
 updateStateParams();
+// URL initial preset is not a phase transition: suppress first-frame shock ripples.
+icePrev = P.ice;
+steamPrev = P.steam;
 resize();
 let last = performance.now(), fpsAcc = 0, fpsN = 0;
 function frame(now) {
@@ -1063,7 +1154,7 @@ function frame(now) {
   last = now;
   ema = ema * 0.94 + (dt * 1000) * 0.06;
   if (DEBUG) { fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('#fps').textContent = Math.round(fpsN / fpsAcc) + ' fps · ' + Math.round(fboW) + 'p'; fpsAcc = 0; fpsN = 0; } }
-  simTime += dt;
+  simTime += reducedMotion.matches ? 0 : dt;
 
   // —— 温度缓动 + 变化率 ——
   const prevDisp = dispTemp;
@@ -1076,15 +1167,15 @@ function frame(now) {
   const crossedIce = (P.ice > 0.5) !== (icePrev > 0.5);
   const crossedSteam = (P.steam > 0.5) !== (steamPrev > 0.5);
   if (crossedIce || crossedSteam) {
-    flash = Math.max(flash, 0.34);
-    shake = Math.max(shake, 0.010);
+    flash = Math.max(flash, reducedMotion.matches ? 0 : 0.16);
+    shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0035);
     shakeAng = Math.random() * Math.PI * 2; shakeFreq = 18 + Math.random() * 8;
     addRipple(camPos[0] * 0.6, camPos[2] * 0.6, 0.55);   // 相变冲击在水面荡一圈
   }
   icePrev = P.ice; steamPrev = P.steam;
 
   // —— 温度变化率驱动色差脉冲 ——
-  const targetAberr = Math.min(Math.abs(tempVel) * 0.00075, 0.0072);
+  const targetAberr = reducedMotion.matches ? 0 : Math.min(Math.abs(tempVel) * 0.0004, 0.0035);
   aberr = Math.max(targetAberr, aberr - aberr * Math.min(1, dt * 2.2));
   flash *= Math.exp(-dt * 3.4);
   shake *= Math.exp(-dt * 3.0);
@@ -1118,9 +1209,11 @@ function frame(now) {
   camPos[1] = CAM_POS[1] + Math.sin(idleClock * 0.17 + 1.3) * drift * 0.14;
   camPos[2] = CAM_POS[2] * (1 + zoom * 0.9) + Math.cos(idleClock * 0.13) * drift * 0.30;
 
-  updateQuality(dt);
-  render();
-  updateUI();
+  if (!document.hidden) {
+    updateQuality(dt);
+    if (!window.__suspendRendering) render();
+    updateUI();
+  }
   window.__frames++;
   requestAnimationFrame(frame);
 }
