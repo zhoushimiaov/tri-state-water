@@ -32,6 +32,8 @@
   html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#071b24;
     color:var(--ink); font-family:var(--font); -webkit-font-smoothing:antialiased; }
   #gl { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none; }
+  body::after { content:''; position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg,rgba(3,20,28,.29),transparent 30%,transparent 78%,rgba(3,20,28,.10)); }
   button,input { font:inherit; }
   :focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
   .hidden { display:none !important; }
@@ -193,6 +195,9 @@ const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: 
 if (!gl) { $('#fatal').style.display = 'grid'; throw new Error('no webgl2'); }
 const extHDR = gl.getExtension('EXT_color_buffer_float');
 const floatLinear = !!gl.getExtension('OES_texture_float_linear');
+// Half-float NEAREST upscaling accentuates distant wave aliasing; prefer LDR linear filtering
+// on drivers without floating-point linear texture filtering.
+const useHDR = !!extHDR && floatLinear;
 
 // WebGL 上下文丢失保护：提示并在恢复后自动重载
 canvas.addEventListener('webglcontextlost', e => {
@@ -768,9 +773,9 @@ function makeFBO(w, h) {
   }
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  if (extHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  if (useHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
   else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  const filter = extHDR && !floatLinear ? gl.NEAREST : gl.LINEAR;
+  const filter = gl.LINEAR;
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -1107,7 +1112,7 @@ function render() {
   gl.uniform1f(U(progPost, 'uSteam'), P.steam);
   gl.uniform2f(U(progPost, 'uSunUV'), sunUV[0], sunUV[1]);
   gl.uniform1f(U(progPost, 'uSunVis'), sunVis);
-  gl.uniform1f(U(progPost, 'uHdr'), extHDR ? 1 : 0);
+  gl.uniform1f(U(progPost, 'uHdr'), useHDR ? 1 : 0);
   gl.uniform1f(U(progPost, 'uFlash'), flash);
   gl.uniform1f(U(progPost, 'uAberr'), aberr);
   gl.uniform1f(U(progPost, 'uShake'), shake * Math.sin(shakeAng));
