@@ -19,9 +19,11 @@ async function checkScene(state, screenshot) {
   const diagnostics = await page.evaluate(() => ({
     frames: window.__frames, error: window.__lastError || '',
     gl: Boolean(document.querySelector('#gl')?.getContext('webgl2')),
-    width: document.querySelector('#gl')?.width
+    width: document.querySelector('#gl')?.width,
+    glError: document.querySelector('#gl').getContext('webgl2').getError()
   }));
   assert.ok(diagnostics.gl, 'WebGL2 unavailable');
+  assert.equal(diagnostics.glError, 0, 'WebGL error after drawing');
   assert.ok(diagnostics.frames > 10, 'Animation loop stopped');
   assert.equal(diagnostics.error, '', 'Runtime error: ' + diagnostics.error);
   assert.ok(diagnostics.width >= 300, 'Canvas failed to resize');
@@ -80,6 +82,9 @@ try {
   await page.goto('http://127.0.0.1:4173/?quality=high&state=water', { waitUntil:'domcontentloaded' });
   await page.waitForFunction(() => window.__frames > 4, null, { timeout: 90000 });
   assert.equal(await page.evaluate(() => window.__lastError || ''), '');
+  await page.evaluate(() => { window.__suspendRendering = true; });
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: 'screenshots/water-high-quality.png', timeout: 90000, animations: 'disabled' });
   assert.deepEqual(errors, [], 'Unexpected page errors');
   console.log('WebGL/browser smoke tests passed.');
 } finally {
