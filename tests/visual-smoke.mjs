@@ -64,6 +64,22 @@ try {
   await page.screenshot({ path: 'screenshots/water-small-mobile.png', animations: 'disabled', timeout: 90000 });
   const narrowPanel = await page.locator('#panel').boundingBox();
   assert.ok(narrowPanel.x >= 0 && narrowPanel.x + narrowPanel.width <= 350);
+  // ?ui=0 should be reversible from the keyboard; hidden controls must be inert.
+  await page.goto('http://127.0.0.1:4173/?quality=low&ui=0&state=water', { waitUntil:'domcontentloaded' });
+  assert.equal(await page.locator('#panel').evaluate(el => el.inert), true);
+  assert.equal(await page.locator('#panel').evaluate(el => getComputedStyle(el).opacity), '0');
+  await page.keyboard.press('h');
+  assert.equal(await page.locator('#panel').evaluate(el => el.inert), false);
+  assert.ok(!new URL(page.url()).searchParams.has('ui'), 'UI show state not reflected in URL');
+  await page.keyboard.press('h');
+  assert.equal(await page.locator('#panel').evaluate(el => el.inert), true);
+  assert.equal(new URL(page.url()).searchParams.get('ui'), '0');
+
+  // Full-quality shaders and 300x300 mesh must also compile and draw in headless WebGL.
+  await page.setViewportSize({ width: 640, height: 400 });
+  await page.goto('http://127.0.0.1:4173/?quality=high&state=water', { waitUntil:'domcontentloaded' });
+  await page.waitForFunction(() => window.__frames > 4, null, { timeout: 90000 });
+  assert.equal(await page.evaluate(() => window.__lastError || ''), '');
   assert.deepEqual(errors, [], 'Unexpected page errors');
   console.log('WebGL/browser smoke tests passed.');
 } finally {
