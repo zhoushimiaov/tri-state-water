@@ -181,6 +181,7 @@
 <script>
 'use strict';
 window.__frames = 0;
+window.__suspendRendering = false; // 截图/浏览器测试可暂停 GPU 绘制，保留最后一帧
 window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
 /* ================= 基础工具 ================= */
 const $ = s => document.querySelector(s);
@@ -216,6 +217,8 @@ function markPresets(near) {
 
 const params = new URLSearchParams(location.search);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const LOW_QUALITY = params.get('quality') === 'low' ||
+  (window.matchMedia('(max-width: 640px)').matches && (navigator.hardwareConcurrency || 4) <= 4);
 const DEBUG = params.has('debug');
 if (DEBUG) $('#fps').style.display = 'block';
 
@@ -326,8 +329,9 @@ vec3 mountains(vec3 rd, vec3 sky){
 const waveDef = [];
 {
   let seed = 7, rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 22; i++) {
-    const t = i / 21;
+  const waveCount = LOW_QUALITY ? 14 : 22;
+  for (let i = 0; i < waveCount; i++) {
+    const t = i / (waveCount - 1);
     const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);   // 波长 7m → ~0.3m
     // 风向占主导，叠加少量横向涌浪；避免完全随机方向形成“沸腾的海面”。
     const crossSwell = i % 5 === 0;
@@ -687,7 +691,7 @@ function attrib(loc, data, size, stride = 0, offset = 0) {
 }
 // 水面网格
 const waterVAO = (() => {
-  const N = 300, half = 20;
+  const N = LOW_QUALITY ? 140 : 300, half = 20;
   const verts = [], idx = [];
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++)
     verts.push(-half + 40 * i / N, 0, -half + 40 * j / N);
@@ -748,8 +752,8 @@ const snowVAO = (() => {
 
 /* ================= 场景 FBO ================= */
 let sceneFBO = null, fboW = 0, fboH = 0;
-let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-let resAdj = 1.0;
+let dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
+let resAdj = LOW_QUALITY ? 0.7 : 1.0;
 function makeFBO(w, h) {
   if (sceneFBO) {
     gl.deleteTexture(sceneFBO.tex);
@@ -781,7 +785,7 @@ function makeFBO(w, h) {
   fboW = w; fboH = h;
 }
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
   const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
   const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -1173,7 +1177,7 @@ function frame(now) {
 
   if (!document.hidden) {
     updateQuality(dt);
-    render();
+    if (!window.__suspendRendering) render();
     updateUI();
   }
   window.__frames++;
