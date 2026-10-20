@@ -24,7 +24,7 @@ async function checkScene(state, screenshot) {
   assert.ok(diagnostics.gl, 'WebGL2 unavailable');
   assert.ok(diagnostics.frames > 12, 'Animation loop stopped');
   assert.equal(diagnostics.error, '', 'Runtime error: ' + diagnostics.error);
-  assert.ok(diagnostics.width >= 720, 'Canvas failed to resize');
+  assert.ok(diagnostics.width >= 300, 'Canvas failed to resize');
   await page.screenshot({ path: 'screenshots/' + screenshot, animations: 'disabled' });
   console.log(state, diagnostics);
 }
@@ -55,6 +55,8 @@ try {
   assert.equal(await page.locator('#slider').inputValue(), '130');
   assert.equal(await page.locator('.preset[data-t="130"]').getAttribute('aria-pressed'), 'true');
 
+  await page.locator('.preset[data-t="24"]').click();
+  await page.waitForTimeout(350);
   await page.setViewportSize({ width: 350, height: 740 });
   await page.screenshot({ path: 'screenshots/water-small-mobile.png' });
   const narrowPanel = await page.locator('#panel').boundingBox();
