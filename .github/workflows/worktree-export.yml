@@ -1,0 +1,22 @@
+name: Temporary isolated worktree export
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - name: Archive checkout with Git metadata
+        run: |
+          tar -czf source-worktree.tar.gz --exclude=source-worktree.tar.gz .git index.html README.md REVIEW.md REVIEW-FOLLOWUP.md DESIGN.md LICENSE .github tests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worktree-source
+          path: source-worktree.tar.gz
+          retention-days: 1
