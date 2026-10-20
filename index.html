@@ -357,6 +357,7 @@ const WAVE_CODE = waveDef.map(v =>
 const VS_WATER = `
 uniform mat4 uVP;
 uniform float uTime, uWaveAmp, uSteam;
+uniform vec3 uCam;
 uniform vec4 uRipple[24];
 layout(location = 0) in vec3 aPos;
 out vec3 vW; out vec3 vN; out float vH;
@@ -364,9 +365,14 @@ void main(){
   vec2 p = aPos.xz;
   float h = 0.0; vec2 grad = vec2(0.0);
   ${WAVE_CODE}
-  h += uSteam*0.016*sin(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3);
-  grad += uSteam*0.016*vec2(6.7*cos(p.x*6.7+uTime*8.5)*sin(p.y*7.9-uTime*7.3),
-                            -7.9*sin(p.x*6.7+uTime*8.5)*cos(p.y*7.9-uTime*7.3));
+  // Long-lived boiling ripples use wavelengths that the grid can actually resolve.
+  // Derivative sign matches d/dz sin(p.y*k - time): positive k, not negative.
+  float boilAmp = uSteam*0.009;
+  float boilA = p.x*3.6 + uTime*5.2;
+  float boilB = p.y*4.4 - uTime*4.8;
+  h += boilAmp*sin(boilA)*sin(boilB);
+  grad += boilAmp*vec2(3.6*cos(boilA)*sin(boilB),
+                       4.4*sin(boilA)*cos(boilB));
   for(int i=0;i<24;i++){
     vec4 r = uRipple[i];
     float age = uTime - r.z;
@@ -380,7 +386,10 @@ void main(){
       grad += (dhdd/d)*dv;
     }
   }
-  h *= uWaveAmp; grad *= uWaveAmp;
+  // Fade distant geometry displacement to avoid undersampling at grazing angles.
+  float farFade = mix(0.14, 1.0, 1.0-smoothstep(12.0, 29.0, length(p-uCam.xz)));
+  h *= uWaveAmp*farFade;
+  grad *= uWaveAmp*farFade;
   vec3 wp = vec3(p.x, h, p.y);
   vW = wp; vN = vec3(-grad.x, 1.0, -grad.y); vH = h;
   gl_Position = uVP*vec4(wp, 1.0);
@@ -440,10 +449,10 @@ void main(){
     float cracks = 1.0-smoothstep(0.02,0.12,cell.y-cell.x);
     float frost = fbm(vW.xz*3.1+5.0);
     vec3 iceCol = vec3(0.59,0.76,0.84)*(0.68+0.44*frost);
-    iceCol *= 1.0-0.24*cracks;
-    iceCol += vec3(0.91,0.98,1.0)*cracks*0.16;
+    iceCol *= 1.0 - mix(0.30,0.47,uDeepIce)*cracks;
+    iceCol += vec3(0.79,0.92,0.99)*cracks*0.07;
     iceCol = mix(iceCol,vec3(0.78,0.88,0.92)*(0.69+0.38*frost),uDeepIce*0.74);
-    float iceSun = pow(sunDot,950.0)*1.2;
+    float iceSun = pow(sunDot,950.0)*0.62;
     vec2 cellId = floor(vW.xz*26.0), cellUV = fract(vW.xz*26.0);
     float tw = step(0.996,hash1(cellId+floor(uTime*3.0)))*
                (1.0-smoothstep(0.0,0.12,length(cellUV-hash2(cellId+3.1))));
@@ -871,7 +880,7 @@ function updateStateParams() {
   let deep = mix3([0.010, 0.085, 0.110], [0.025, 0.150, 0.160], clamp(warm * 0.8 + steam * 0.4, 0, 1));
   deep = mix3(deep, [0.040, 0.190, 0.220], ice);
   let waterCol = mix3([0.040, 0.300, 0.330], [0.070, 0.360, 0.330], warm);
-  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce), deep, waterCol };
+  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce) * (1 - 0.16 * steam), deep, waterCol };
 }
 
 /* ================= 输入 ================= */
