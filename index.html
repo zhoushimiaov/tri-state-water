@@ -170,9 +170,9 @@
     <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
     <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0° 冰点</span><span style="left:73.1%">100° 沸点</span><span>150°</span></div>
   </div>
-  <div id="badge" role="status" aria-live="polite">
+  <div id="badge" aria-label="当前水体状态">
     <i aria-hidden="true"></i>
-    <div class="badgeCopy"><small>CURRENT STATE</small><b>24°C</b><span>液态 · 水</span></div>
+    <div class="badgeCopy"><small>CURRENT STATE</small><b>24°C</b><span role="status" aria-live="polite">液态 · 水</span></div>
   </div>
 </section>
 <div id="fps"></div>
@@ -215,6 +215,7 @@ function markPresets(near) {
 }
 
 const params = new URLSearchParams(location.search);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const DEBUG = params.has('debug');
 if (DEBUG) $('#fps').style.display = 'block';
 
@@ -891,8 +892,8 @@ canvas.addEventListener('pointerup', e => {
       if (Math.abs(px) < 13 && Math.abs(pz) < 13) {
         addRipple(px, pz, 0.5 + Math.random() * 0.12);   // 加强涟漪
         // —— 打击感：轻微色差 + 震动 ——
-        aberr = Math.max(aberr, 0.010);
-        shake = Math.max(shake, 0.0035);
+        aberr = Math.max(aberr, reducedMotion.matches ? 0 : 0.005);
+        shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0015);
         shakeAng = Math.random() * Math.PI * 2; shakeFreq = 26;
       }
     }
@@ -931,7 +932,11 @@ window.addEventListener('keydown', e => {
   if (e.key === '1') setTemp(-36, true);
   if (e.key === '2') setTemp(24, true);
   if (e.key === '3') setTemp(130, true);
-  if (e.key === 'h' || e.key === 'H') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off'));
+  if (e.key === 'h' || e.key === 'H') {
+    const hidden = !$('#panel').classList.contains('ui-off');
+    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off', hidden));
+    $('#panel').inert = hidden; // 已隐藏的控件也退出键盘 Tab 顺序
+  }
 });
 
 let lastBadge = '', lastPhase = '', lastNear = null;
@@ -1111,7 +1116,7 @@ function frame(now) {
   last = now;
   ema = ema * 0.94 + (dt * 1000) * 0.06;
   if (DEBUG) { fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('#fps').textContent = Math.round(fpsN / fpsAcc) + ' fps · ' + Math.round(fboW) + 'p'; fpsAcc = 0; fpsN = 0; } }
-  simTime += dt;
+  simTime += reducedMotion.matches ? 0 : dt;
 
   // —— 温度缓动 + 变化率 ——
   const prevDisp = dispTemp;
@@ -1124,15 +1129,15 @@ function frame(now) {
   const crossedIce = (P.ice > 0.5) !== (icePrev > 0.5);
   const crossedSteam = (P.steam > 0.5) !== (steamPrev > 0.5);
   if (crossedIce || crossedSteam) {
-    flash = Math.max(flash, 0.34);
-    shake = Math.max(shake, 0.010);
+    flash = Math.max(flash, reducedMotion.matches ? 0 : 0.16);
+    shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0035);
     shakeAng = Math.random() * Math.PI * 2; shakeFreq = 18 + Math.random() * 8;
     addRipple(camPos[0] * 0.6, camPos[2] * 0.6, 0.55);   // 相变冲击在水面荡一圈
   }
   icePrev = P.ice; steamPrev = P.steam;
 
   // —— 温度变化率驱动色差脉冲 ——
-  const targetAberr = Math.min(Math.abs(tempVel) * 0.00075, 0.0072);
+  const targetAberr = reducedMotion.matches ? 0 : Math.min(Math.abs(tempVel) * 0.0004, 0.0035);
   aberr = Math.max(targetAberr, aberr - aberr * Math.min(1, dt * 2.2));
   flash *= Math.exp(-dt * 3.4);
   shake *= Math.exp(-dt * 3.0);
@@ -1166,9 +1171,11 @@ function frame(now) {
   camPos[1] = CAM_POS[1] + Math.sin(idleClock * 0.17 + 1.3) * drift * 0.14;
   camPos[2] = CAM_POS[2] * (1 + zoom * 0.9) + Math.cos(idleClock * 0.13) * drift * 0.30;
 
-  updateQuality(dt);
-  render();
-  updateUI();
+  if (!document.hidden) {
+    updateQuality(dt);
+    render();
+    updateUI();
+  }
   window.__frames++;
   requestAnimationFrame(frame);
 }
