@@ -19,150 +19,162 @@
   无依赖 · 无构建 · 单文件。直接用浏览器打开即可。
 -->
 <style>
-  :root{
-    --ink:#fafafa; --dim:#a3b1b8; --ink-deep:#171717;
-    --glass:rgba(10,12,14,.60); --line:rgba(255,255,255,.10);
-    --focus:hsla(212,100%,48%,1);
-    --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  :root {
+    color-scheme: dark;
+    --ink:#f4f7f7; --dim:#b8c8cb; --quiet:#8ea4aa;
+    --line:rgba(233,250,252,.14); --panel:rgba(8,25,31,.76);
+    --focus:#a7e7fa;
+    --font:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --accent:#88ebdb;
   }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  html,body{ width:100%; height:100%; overflow:hidden; background:#04141a;
-    font-family:var(--font); font-feature-settings:'liga';
-    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-  #gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
-
-  /* 键盘可访问性：统一焦点环（Vercel focus blue） */
-  :focus{ outline:none; }
-  :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
-
-  #title{ position:fixed; top:18px; left:22px; color:var(--ink); z-index:10; user-select:none;
-    text-shadow:0 1px 12px rgba(0,0,0,.6); pointer-events:none; }
-  #title b{ font-size:24px; font-weight:600; letter-spacing:-0.96px; }
-  #title span{ display:block; font-size:12px; font-weight:500; color:var(--dim); letter-spacing:.22em; margin-top:5px;
-    font-family:var(--mono); text-transform:uppercase; }
-
-  #hint{ position:fixed; top:20px; right:22px; z-index:10; color:var(--dim); font-size:13px; font-weight:400; line-height:2.0;
-    text-align:right; text-shadow:0 1px 8px rgba(0,0,0,.7); user-select:none; pointer-events:none; }
-  #hint kbd{ font:500 11px var(--mono); color:var(--ink); box-shadow:0 0 0 1px var(--line) inset; border-radius:4px; padding:1px 5px; }
-
-  /* —— 控制面板：深色玻璃 + 多层 shadow 堆叠（shadow-as-border 体系） —— */
-  #panel{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:10;
-    display:flex; align-items:center; gap:14px; padding:12px 16px;
-    width:max-content; max-width:calc(100vw - 24px);
-    background:var(--glass); border-radius:12px;
-    box-shadow:
-      rgba(255,255,255,0.10) 0px 0px 0px 1px,
-      rgba(255,255,255,0.05) 0px 0px 0px 1px inset,
-      rgba(0,0,0,0.32) 0px 4px 12px,
-      rgba(0,0,0,0.42) 0px 16px 32px -12px;
-    backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15);
+  * { box-sizing:border-box; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#071b24;
+    color:var(--ink); font-family:var(--font); -webkit-font-smoothing:antialiased; }
+  #gl { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none; }
+  button,input { font:inherit; }
+  :focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
+  .hidden { display:none !important; }
+  #title { position:fixed; left:clamp(22px,3.4vw,58px); top:clamp(22px,4.3vh,48px);
+    z-index:5; max-width:min(440px,calc(100vw - 40px)); pointer-events:none; user-select:none;
+    filter:drop-shadow(0 2px 12px rgba(1,11,18,.5)); }
+  #title .eyebrow { display:flex; align-items:center; gap:12px; margin-bottom:14px;
+    color:#d0edf0; font:500 10px/1.3 var(--mono); letter-spacing:.17em; text-transform:uppercase; }
+  #title .eyebrow::before { content:''; width:25px; height:1px; background:var(--accent); }
+  #title b { display:block; font-size:clamp(29px,3vw,43px); line-height:1.06; font-weight:500;
+    letter-spacing:-.055em; }
+  #title span { display:block; margin-top:11px; color:#d1dee0; font-size:12px;
+    line-height:1.6; letter-spacing:.06em; }
+  #hint { position:fixed; right:clamp(22px,3.4vw,58px); top:clamp(24px,4.5vh,50px); z-index:5;
+    color:#d7e9eb; font-size:12px; font-weight:400; line-height:2;
+    text-align:right; text-shadow:0 2px 12px rgba(1,11,18,.65); user-select:none; pointer-events:none; }
+  #hint .hint-heading { font:500 10px/1.5 var(--mono); letter-spacing:.16em;
+    color:#effffc; margin-bottom:9px; }
+  #hint kbd { display:inline-block; font:500 10px/1.45 var(--mono); color:var(--ink);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.26); background:rgba(5,17,22,.4);
+    border-radius:4px; padding:2px 6px; margin-inline:2px; }
+  #panel { position:fixed; left:50%; bottom:clamp(14px,3.8vh,38px); transform:translateX(-50%);
+    z-index:10; display:grid; grid-template-columns:auto minmax(220px,1fr) auto;
+    align-items:center; gap:26px; width:min(890px,calc(100vw - 36px)); padding:19px 24px;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 22px 70px rgba(1,12,17,.33), inset 0 1px 0 rgba(255,255,255,.075);
+    backdrop-filter:blur(24px) saturate(1.22); -webkit-backdrop-filter:blur(24px) saturate(1.22);
     user-select:none; }
-  .preset{ appearance:none; border:0; background:rgba(255,255,255,.06); color:var(--ink);
-    font:500 14px/1.43 var(--font); padding:8px 14px; border-radius:6px; cursor:pointer; white-space:nowrap;
-    box-shadow:rgba(255,255,255,0.10) 0px 0px 0px 1px;
-    transition:transform .16s cubic-bezier(.34,1.56,.64,1), background .18s ease, color .18s ease, box-shadow .25s ease; }
-  .preset:hover{ background:rgba(255,255,255,.14); transform:translateY(-1px); }
-  .preset:active{ transform:translateY(1px) scale(.94); }
-  .preset.on{ background:var(--ink); color:var(--ink-deep);
-    box-shadow:rgba(255,255,255,0.9) 0px 0px 0px 1px, rgba(255,255,255,0.22) 0px 0px 18px; }
-
-  #sliderWrap{ display:flex; flex-direction:column; gap:6px; width:min(320px,38vw); }
-  /* 加大命中区（20px），轨道本身仍是 5px */
-  #slider{ -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
-  #slider:focus-visible{ outline-offset:4px; }
-  /* 渐变停靠点与真实温度刻度对齐：0°C = 19.35%，100°C = 73.1% */
-  #slider::-webkit-slider-runnable-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5.5px;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
-    transition:transform .15s ease; }
-  #slider:hover::-webkit-slider-thumb{ transform:scale(1.12); }
-  #slider:active::-webkit-slider-thumb{ transform:scale(1.28); }
-  #slider::-moz-range-track{ height:5px; border-radius:3px;
-    background:linear-gradient(90deg,#7fd8ff 0%,#8fe3f2 19.35%,#3fd9c2 19.35%,#3fd9c2 73.1%,#ffab5e 90%,#ff7a45 100%); }
-  #slider::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; border:none;
-    background:#fafafa; box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.4);
-    transition:transform .15s ease; }
-  #slider:hover::-moz-range-thumb{ transform:scale(1.12); }
-  #slider:active::-moz-range-thumb{ transform:scale(1.28); }
-  /* 刻度标签按真实温度位置绝对定位，带小刻度线 */
-  #ticks{ position:relative; height:12px; color:var(--dim); font-size:10px; font-weight:500; letter-spacing:.02em;
-    font-family:var(--mono); font-variant-numeric:tabular-nums; }
-  #ticks span{ position:absolute; transform:translateX(-50%); white-space:nowrap; }
-  #ticks span::before{ content:''; position:absolute; left:50%; top:-6px; width:1px; height:3px;
-    background:var(--dim); opacity:.55; }
-  #ticks span:first-child{ left:0; transform:none; }
-  #ticks span:first-child::before{ left:3px; }
-  #ticks span:last-child{ right:0; transform:none; }
-  #ticks span:last-child::before{ left:auto; right:3px; }
-
-  /* 状态徽章：pill + 状态色圆点（色值经 --state 由 JS 驱动） */
-  #badge{ --state:#5fe8cf; display:flex; align-items:center; justify-content:center; gap:8px;
-    min-width:150px; font:500 13px/1 var(--font); color:var(--ink);
-    border-radius:9999px; padding:9px 14px; background:rgba(255,255,255,.05);
-    box-shadow:rgba(255,255,255,0.08) 0px 0px 0px 1px;
-    transition:box-shadow .4s ease; white-space:nowrap; }
-  #badge i{ width:7px; height:7px; border-radius:50%; background:var(--state);
-    box-shadow:0 0 8px var(--state); transition:background .4s ease, box-shadow .4s ease; }
-  #badge b{ font:600 13px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--state);
-    transition:color .4s ease; }
-  #badge span{ color:var(--ink); opacity:.85; }
-
-  #fps{ position:fixed; right:14px; bottom:14px; z-index:11; color:var(--dim); font-size:11px; display:none;
-    font-family:var(--mono); font-variant-numeric:tabular-nums; }
-  #fatal{ position:fixed; inset:0; z-index:99; display:none; place-items:center; background:#04141a; color:var(--dim);
-    font-size:15px; text-align:center; line-height:2; }
-  .hidden{ display:none !important; }
-
-  /* —— UI 编排：入场 stagger —— */
-  @keyframes riseIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes riseInC { from { opacity:0; transform:translate(-50%,22px); } to { opacity:1; transform:translate(-50%,0); } }
-  #title { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .25s backwards; }
-  #hint  { animation: riseIn .8s cubic-bezier(.18,.72,.22,1) .5s backwards; }
-  #panel { animation: riseInC .9s cubic-bezier(.18,.72,.22,1) .7s backwards; }
-
-  /* —— 面板显隐过渡（替代 H 键硬切） —— */
-  #title, #hint, #panel { transition: opacity .45s ease, transform .45s cubic-bezier(.5,0,.25,1); }
+  #panel::before { content:''; position:absolute; left:24px; right:24px; top:0;
+    height:1px; background:linear-gradient(90deg,transparent,rgba(237,255,255,.22),transparent);
+    pointer-events:none; }
+  .field-label { display:block; margin-bottom:12px; font:500 10px/1.3 var(--mono);
+    color:#b4cdd2; text-transform:uppercase; letter-spacing:.13em; }
+  .presetRow { display:flex; gap:5px; padding:4px; background:rgba(0,13,18,.36);
+    border:1px solid rgba(235,252,253,.09); border-radius:9px; }
+  .preset { border:0; background:transparent; color:#bed0d4; padding:9px 17px; min-height:37px;
+    border-radius:6px; cursor:pointer; white-space:nowrap; font-size:13px; font-weight:500;
+    transition:background .2s,color .2s,box-shadow .2s; }
+  .preset:hover { color:white; background:rgba(255,255,255,.09); }
+  .preset.on { color:#082126; background:#e2f8f5; box-shadow:0 1px 8px rgba(6,20,25,.24); }
+  #sliderWrap { min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .sliderTop { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .sliderTop .field-label { margin-bottom:0; }
+  #targetReading { color:#e2f7f5; font:500 13px/1.3 var(--mono);
+    font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+  #slider { appearance:none; -webkit-appearance:none; background:transparent; cursor:pointer;
+    width:100%; height:28px; margin:0; }
+  #slider::-webkit-slider-runnable-track { height:5px; border-radius:99px; background:linear-gradient(
+    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
+  #slider::-moz-range-track { height:5px; border-radius:99px; background:linear-gradient(
+    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
+  #slider::-webkit-slider-thumb { -webkit-appearance:none; width:17px; height:17px; margin-top:-6px;
+    border:3px solid #f1fbfb; border-radius:50%; background:#244850;
+    box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4);
+    transition:box-shadow .2s, transform .2s; }
+  #slider::-moz-range-thumb { width:11px; height:11px; border:3px solid #f1fbfb;
+    border-radius:50%; background:#244850; box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4); }
+  #slider:hover::-webkit-slider-thumb { transform:scale(1.1); box-shadow:0 0 0 5px rgba(224,250,246,.22); }
+  #ticks { position:relative; height:14px; color:#9db5ba; font:500 10px/1.4 var(--mono);
+    font-variant-numeric:tabular-nums; }
+  #ticks span { position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
+  #ticks span::before { content:''; position:absolute; height:4px; width:1px;
+    background:#9db5ba; opacity:.6; top:-6px; left:50%; }
+  #ticks span:first-child { left:0; transform:none; }
+  #ticks span:first-child::before { left:3px; }
+  #ticks span:last-child { right:0; transform:none; }
+  #ticks span:last-child::before { left:auto; right:3px; }
+  #badge { --state:#88ebdb; display:flex; align-items:center; gap:12px;
+    padding-left:24px; min-width:162px; border-left:1px solid var(--line); }
+  #badge i { display:block; flex:none; width:7px; height:7px; margin-top:17px; align-self:flex-start;
+    background:var(--state); border-radius:50%; box-shadow:0 0 14px var(--state); }
+  #badge .badgeCopy { display:grid; gap:3px; }
+  #badge small { font:500 10px/1.4 var(--mono); color:#acc5c9; letter-spacing:.1em; }
+  #badge b { color:#effefe; font:500 23px/1.15 var(--mono); letter-spacing:-.06em;
+    font-variant-numeric:tabular-nums; }
+  #badge span { color:var(--state); font-size:11px; font-weight:500; white-space:nowrap; }
+  #fps { position:fixed; right:18px; bottom:8px; z-index:11; color:#d3e8e9;
+    font:500 10px var(--mono); display:none; }
+  #fatal { position:fixed; inset:0; z-index:99; display:none; place-items:center;
+    padding:24px; background:#071b24; color:#d5e8ea; text-align:center; font-size:15px; line-height:2; }
+  #title,#hint,#panel { transition:opacity .32s ease,translate .32s ease; }
   .ui-off { opacity:0 !important; pointer-events:none !important; }
-  #panel.ui-off { transform: translate(-50%, 26px); }
-  #title.ui-off { transform: translateY(-14px); }
-  #hint.ui-off  { transform: translateY(-14px); }
-
-  /* —— 弹性微交互（transition 已在组件定义处声明） —— */
-  @keyframes pop { 0% { transform:scale(.88); } 55% { transform:scale(1.1); } 100% { transform:scale(1); } }
-  .preset.pop { animation: pop .38s cubic-bezier(.34,1.56,.64,1); }
-  @keyframes badgePop { 0% { transform:scale(.9); } 60% { transform:scale(1.07); } 100% { transform:scale(1); } }
-  #badge.pop { animation: badgePop .42s cubic-bezier(.34,1.56,.64,1); }
-
-  /* —— 窄屏：面板换行，滑杆独占一行 —— */
-  @media (max-width:640px){
-    #hint{ display:none; }
-    #panel{ flex-wrap:wrap; justify-content:center; gap:8px 10px; padding:10px 12px; bottom:12px; }
-    #sliderWrap{ order:5; width:100%; }
-    #badge{ min-width:0; padding:8px 12px; }
+  #panel.ui-off { translate:0 20px; }
+  #title.ui-off,#hint.ui-off { translate:0 -10px; }
+  @media (max-width:860px) {
+    #panel { grid-template-columns:minmax(0,1fr) auto; gap:16px 24px; max-width:660px; padding:17px 20px; }
+    #sliderWrap { grid-column:1 / -1; grid-row:2; }
+    #badge { grid-column:2; grid-row:1; }
   }
-  /* —— 尊重系统的减弱动效偏好 —— */
-  @media (prefers-reduced-motion:reduce){
-    *, *::before, *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
-  }</style>
+  @media (max-width:640px) {
+    #title { left:22px; top:23px; }
+    #title b { font-size:31px; }
+    #title .eyebrow { font-size:9px; margin-bottom:10px; }
+    #title span { font-size:11px; }
+    #hint { display:none; }
+    #panel { bottom:max(12px,env(safe-area-inset-bottom)); width:calc(100vw - 24px);
+      padding:14px 15px; gap:14px 8px; }
+    .preset { padding:9px 11px; min-height:36px; }
+    .field-label { font-size:9px; margin-bottom:9px; }
+    #badge { min-width:0; padding-left:13px; gap:8px; }
+    #badge b { font-size:19px; }
+    #badge small { font-size:9px; }
+    #badge i { display:none; }
+  }
+  @media (max-width:370px) {
+    #panel { grid-template-columns:1fr; gap:15px; }
+    #badge { grid-column:1; grid-row:2; flex-direction:row; padding:0; border:0; }
+    #badge .badgeCopy { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+    #badge small { display:none; }
+    #sliderWrap { grid-column:1; grid-row:3; }
+    .presetRow { width:max-content; }
+    #ticks span:nth-child(2),#ticks span:nth-child(3) { font-size:9px; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+  }
+</style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 
-<div id="title"><b>Tri-State Water</b><span>三态之水 · WebGL2</span></div>
-<div id="hint">拖动 环视 · 滚轮 缩放<br>点击水面 荡开涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换状态 &nbsp;<kbd>H</kbd> 隐藏面板</div>
+<header id="title" aria-label="项目标题"><div class="eyebrow">A STUDY OF MATTER · 001</div><b>Tri-State Water</b><span>三态之水 / 温度驱动的实时材质实验</span></header>
+<aside id="hint" aria-label="操作说明"><div class="hint-heading">INTERACTIVE MATERIAL STUDY / WEBGL2</div>拖动环视 &nbsp;·&nbsp; 滚轮缩放<br>轻触水面生成涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换相态 &nbsp;<kbd>H</kbd> 隐藏界面</aside>
 
-<div id="panel" role="group" aria-label="温度控制">
-  <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">❄️ 冰</button>
-  <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">💧 水</button>
-  <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">♨️ 汽</button>
-  <div id="sliderWrap">
-    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
-    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0°C 冰点</span><span style="left:73.1%">100°C 沸点</span><span>150°</span></div>
+<section id="panel" role="group" aria-label="水体相态与温度控制">
+  <div class="panelLead">
+    <label class="field-label">相态 / PHASE</label>
+    <div class="presetRow" role="group" aria-label="温度预设">
+      <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">冰</button>
+      <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">水</button>
+      <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">汽</button>
+    </div>
   </div>
-  <div id="badge" role="status" aria-live="polite"><i></i><b>24°C</b><span>液态 · 水</span></div>
-</div>
+  <div id="sliderWrap">
+    <div class="sliderTop"><label class="field-label" for="slider">温度 / TEMPERATURE</label><output id="targetReading" for="slider">24°C</output></div>
+    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
+    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0° 冰点</span><span style="left:73.1%">100° 沸点</span><span>150°</span></div>
+  </div>
+  <div id="badge" role="status" aria-live="polite">
+    <i aria-hidden="true"></i>
+    <div class="badgeCopy"><small>CURRENT STATE</small><b>24°C</b><span>液态 · 水</span></div>
+  </div>
+</section>
 <div id="fps"></div>
 <div id="fatal"><div>此演示需要支持 <b>WebGL2</b> 的浏览器。<br>请使用较新的 Chrome / Edge / Firefox / Safari 打开。</div></div>
 
