@@ -20,10 +20,12 @@ async function checkScene(state, screenshot) {
     frames: window.__frames, error: window.__lastError || '',
     gl: Boolean(document.querySelector('#gl')?.getContext('webgl2')),
     width: document.querySelector('#gl')?.width,
-    glError: document.querySelector('#gl').getContext('webgl2').getError()
+    glError: document.querySelector('#gl').getContext('webgl2').getError(),
+    initialRippleCount: rippleHead
   }));
   assert.ok(diagnostics.gl, 'WebGL2 unavailable');
   assert.equal(diagnostics.glError, 0, 'WebGL error after drawing');
+  assert.equal(diagnostics.initialRippleCount, 0, 'Preset URLs should not create a startup shock ripple');
   assert.ok(diagnostics.frames > 10, 'Animation loop stopped');
   assert.equal(diagnostics.error, '', 'Runtime error: ' + diagnostics.error);
   assert.ok(diagnostics.width >= 300, 'Canvas failed to resize');
