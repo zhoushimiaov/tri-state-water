@@ -10,7 +10,7 @@
 
 ## 运行
 
-无需安装、无需构建 —— 直接双击打开 `index.html` 即可（无任何外部资源）。
+无需安装、无需构建 —— 直接双击打开 `index.html` 即可。渲染代码零依赖；在线 Geist 字体加载失败时会自动回退到系统字体。
 
 也可以起个本地服务器：
 
@@ -46,6 +46,7 @@ python -m http.server 8000
 ## URL 参数
 
 - `?state=ice|water|steam` — 载入即置为某一状态；切换预设或拖动滑杆时，当前状态会自动同步回地址栏（可分享）
+- `?temp=68` — 以指定温度启动（-36°C ~ 150°C），拖动滑杆后自动写入 URL，支持分享精确温度
 - `?ui=0` — 隐藏界面（适合截图）
 - `?debug` — 右下角显示帧率与渲染分辨率
 
@@ -53,22 +54,34 @@ python -m http.server 8000
 
 全部代码在 [index.html](index.html) 一个文件内，无任何库：
 
-- **海面**：22 个按深水色散关系取速的正弦波叠加，顶点级解析法线；
-  片元级双层滚动细节法线。
+- **海面**：22 个按深水色散关系取速的波列，以主风向和少量交叉涌浪组织；顶点级解析法线，
+  片元级双层平流微法线及毛细纹理。
 - **交互涟漪**：24 个涟漪槽（环形缓冲），扩散波包 + 阻尼，解析梯度参与法线。
 - **焦散**：海床上双层动态 Worley 网纹，随冰冻变为锐利晶状。
 - **海床**：程序化卵石（Worley 元胞着色 + 假 AO）与沙地噪声。
-- **水体**：Fresnel 反射天空 + per-channel Beer 吸收的水柱透射率近似。
+- **水体**：IOR≈1.333 的 Schlick Fresnel 掠射角反射 + 日照高光 + 预乘 Alpha 的体散射近似；
+  海床采用 per-channel Beer 吸收，离屏帧缓冲配备真实深度附件。
 - **三态驱动**：`uIce / uSteam / uWarm / uSnow` 等参数由温度平滑推导，
   在着色器中混合冰纹、沸腾扰动、蒸汽公告板羽流与热浪后处理。
-- **后处理**：HDR 半浮点场景缓冲 → 太阳径向眩光 + 变形条纹 →
+- **后处理**：HDR 半浮点场景缓冲（浮点线性采样能力检测）→ 精简采样的太阳眩光 + 光条 →
   热浪扭曲 → ACES 色调映射 → 暗角与胶片颗粒。
 - **自适应画质**：按帧时间自动升降渲染分辨率，保证流畅。
-- **界面**：深色玻璃面板遵循 Vercel 设计体系（见 [DESIGN.md](DESIGN.md)）——
-  shadow-as-border 多层阴影、Geist 字体字距规则、pill 状态徽章；
+- **界面**：围绕真实场景的轻量材质实验室控制台（见 [DESIGN.md](DESIGN.md) 原始规范），
+  保留 Geist 排版、弱分隔和深色磨砂玻璃；
   滑杆刻度与渐变均按真实温度位置（0°C = 19.35%，100°C = 73.1%）对齐；
   全键盘可操作（焦点环、`aria-pressed`、`aria-live`），
-  支持 `prefers-reduced-motion`，并处理 WebGL 上下文丢失恢复。
+  支持 `prefers-reduced-motion`（包括冻结水面模拟时钟）、精确温度 URL、隐藏控件时退出 Tab 顺序，
+  并处理 WebGL 上下文丢失恢复。
+
+## 浏览器验收
+
+仓库自带 [Playwright 可视化冒烟测试](tests/visual-smoke.mjs)，在 GitHub Actions 中验证
+冰 / 水 / 汽三个状态的 WebGL2 初始化与持续渲染、移动端面板边界、预设及精确温度 URL，
+并上传五张桌面和移动端截图供人工视觉评审。
+
+本地运行：先使用 `python3 -m http.server 4173` 启动静态服务，
+另开终端执行 `npm install --no-save playwright && npx playwright install chromium && node tests/visual-smoke.mjs`。
+如果测试设备没有浏览器/显卡驱动，请使用 GitHub Actions 中的 SwiftShader 软件渲染测试。
 
 ## 致谢
 
