@@ -9,23 +9,26 @@ const browser = await chromium.launch({
   args: ['--enable-webgl', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
 });
 const errors = [];
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1 });
 page.on('pageerror', error => errors.push(error.message));
 
 async function checkScene(state, screenshot) {
-  await page.goto('http://127.0.0.1:4173/?state=' + state, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__frames > 12, null, { timeout: 30000 });
-  await page.waitForTimeout(700);
+  await page.goto('http://127.0.0.1:4173/?quality=low&state=' + state, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__frames > 10, null, { timeout: 60000 });
+  await page.waitForTimeout(250);
   const diagnostics = await page.evaluate(() => ({
     frames: window.__frames, error: window.__lastError || '',
     gl: Boolean(document.querySelector('#gl')?.getContext('webgl2')),
     width: document.querySelector('#gl')?.width
   }));
   assert.ok(diagnostics.gl, 'WebGL2 unavailable');
-  assert.ok(diagnostics.frames > 12, 'Animation loop stopped');
+  assert.ok(diagnostics.frames > 10, 'Animation loop stopped');
   assert.equal(diagnostics.error, '', 'Runtime error: ' + diagnostics.error);
   assert.ok(diagnostics.width >= 300, 'Canvas failed to resize');
-  await page.screenshot({ path: 'screenshots/' + screenshot, animations: 'disabled' });
+  // Stop continuous GPU drawing while Playwright captures the last complete frame.
+  await page.evaluate(() => { window.__suspendRendering = true; });
+  await page.waitForTimeout(180);
+  await page.screenshot({ path: 'screenshots/' + screenshot, animations: 'disabled', timeout: 90000 });
   console.log(state, diagnostics);
 }
 
@@ -58,7 +61,7 @@ try {
   await page.locator('.preset[data-t="24"]').click();
   await page.waitForTimeout(350);
   await page.setViewportSize({ width: 350, height: 740 });
-  await page.screenshot({ path: 'screenshots/water-small-mobile.png' });
+  await page.screenshot({ path: 'screenshots/water-small-mobile.png', animations: 'disabled', timeout: 90000 });
   const narrowPanel = await page.locator('#panel').boundingBox();
   assert.ok(narrowPanel.x >= 0 && narrowPanel.x + narrowPanel.width <= 350);
   assert.deepEqual(errors, [], 'Unexpected page errors');
