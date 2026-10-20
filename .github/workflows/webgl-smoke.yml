@@ -18,7 +18,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Validate HTML script syntax
         run: |
-          node -e "const fs=require('fs');const x=fs.readFileSync('index.html','utf8');const m=x.match(/<script>([\\s\\S]*?)<\\/script>/);if(!m)throw Error('Missing inline script');new Function(m[1]);"
+          node -e "const fs=require('fs');const x=fs.readFileSync('index.html','utf8');const a=x.indexOf('<script>'),b=x.lastIndexOf('</script>');if(a<0||b<=a)throw Error('missing inline script');new Function(x.slice(a+8,b));"
       - name: Run WebGL smoke and capture states
         run: |
           python3 -m http.server 4173 > server.log 2>&1 &
