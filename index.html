@@ -314,12 +314,12 @@ vec3 mountains(vec3 rd, vec3 sky){
            + 0.020*sin(az*2.2 + 5.2);
   vec3 col = sky;
   if(y < r1){                                    // 远山：雾蓝
-    float depth = smoothstep(r1, r1 - 0.02, y);
+    float depth = 1.0 - smoothstep(r1 - 0.02, r1, y);
     vec3 mc = mix(vec3(0.52, 0.66, 0.82), vec3(0.30, 0.44, 0.62), smoothstep(0.0, 0.06, y));
     col = mix(col, mc, depth*0.85);
   }
   if(y < r2){                                    // 近山：深青蓝
-    float depth = smoothstep(r2, r2 - 0.025, y);
+    float depth = 1.0 - smoothstep(r2 - 0.025, r2, y);
     vec3 mc = mix(vec3(0.30, 0.42, 0.56), vec3(0.13, 0.22, 0.34), smoothstep(0.0, 0.08, y));
     col = mix(col, mc, depth*0.94);
   }
@@ -415,9 +415,12 @@ void main(){
   R.y = abs(R.y)*0.98 + 0.02;
   vec3 reflection = mountains(R, skyColor(R,uSun));
   float sunDot = max(dot(R,uSun),0.0);
-  float specular = pow(sunDot, mix(1050.0,480.0,uSteam))*1.7
+  // Screen-space filtered highlight prevents small far-field triangles from flashing.
+  float highlightFootprint = max(fwidth(sunDot), 0.0001);
+  float sharpness = mix(1050.0, 480.0, uSteam) / (1.0 + highlightFootprint*280.0);
+  float specular = pow(sunDot, sharpness)*1.35/(1.0 + highlightFootprint*25.0)
                  + pow(sunDot, mix(110.0,65.0,uSteam))*0.12
-                 + pow(sunDot,18.0)*0.035;
+                 + pow(sunDot,18.0)*0.028;
   float sparkleMask = 0.70 + 0.30*vnoise(vW.xz*8.0 - uTime*vec2(0.19,0.14));
   specular *= sparkleMask;
 
@@ -453,8 +456,10 @@ void main(){
   }
   float dist = length(uCam-vW);
   float fog = 1.0-exp(-dist*0.045);
-  col = mix(col,uDeep,fog);
-  alpha = mix(alpha,1.0,fog*0.93);
+  float fogOpacity = fog*0.93;
+  // Premultiplied layer-over math; color and alpha use the same fog opacity.
+  col = col*(1.0-fogOpacity) + uDeep*fogOpacity;
+  alpha = alpha*(1.0-fogOpacity) + fogOpacity;
   outColor = vec4(col,alpha);
 }`;
 
@@ -475,7 +480,7 @@ ${NOISE}
 void main(){
   vec2 p = vW.xz;
   vec3 w = worley(p*2.05);
-  float mask = smoothstep(0.50, 0.34, w.x);
+  float mask = 1.0 - smoothstep(0.34, 0.50, w.x);
   vec3 pcol = mix(vec3(0.50,0.45,0.38), vec3(0.66,0.62,0.55), hash1(vec2(w.z*7.1, w.z*1.3)));
   pcol = mix(pcol, vec3(0.38,0.33,0.30), step(0.75, hash1(vec2(w.z*13.7, w.z*2.9))));
   float bump = 1.0 - smoothstep(0.0, 0.55, w.x);
@@ -616,7 +621,7 @@ ${NOISE}
 void main(){
   vec2 uv = vUv;
   uv += uShakeDir*uShake;
-  float shimmerMask = smoothstep(1.0, 0.15, uv.y);
+  float shimmerMask = 1.0 - smoothstep(0.15, 1.0, uv.y);
   vec2 so = vec2(vnoise(uv*vec2(55.0,30.0) + uTime*vec2(2.0,4.0)),
                  vnoise(uv*vec2(50.0,28.0) - uTime*vec2(2.4,3.2))) - 0.5;
   uv += so*0.007*uSteam*shimmerMask;
@@ -836,7 +841,10 @@ let lastActive = 0;                     // 上次交互的 simTime
   slider.value = String(targetTemp);
   targetReading.textContent = Math.round(targetTemp) + '°C';
   markPresets([-36,24,130].includes(targetTemp) ? targetTemp : NaN);
-  if (params.get('ui') === '0') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('hidden'));
+  if (params.get('ui') === '0') {
+    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('ui-off'));
+    $('#panel').inert = true;
+  }
 }
 
 // 涟漪槽
@@ -951,6 +959,9 @@ window.addEventListener('keydown', e => {
     const hidden = !$('#panel').classList.contains('ui-off');
     ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off', hidden));
     $('#panel').inert = hidden; // 已隐藏的控件也退出键盘 Tab 顺序
+    const url = new URL(location.href);
+    if (hidden) url.searchParams.set('ui', '0'); else url.searchParams.delete('ui');
+    history.replaceState(null, '', url);
   }
 });
 
