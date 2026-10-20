@@ -191,6 +191,7 @@ const canvas = $('#gl');
 const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true });
 if (!gl) { $('#fatal').style.display = 'grid'; throw new Error('no webgl2'); }
 const extHDR = gl.getExtension('EXT_color_buffer_float');
+const floatLinear = !!gl.getExtension('OES_texture_float_linear');
 
 // WebGL 上下文丢失保护：提示并在恢复后自动重载
 canvas.addEventListener('webglcontextlost', e => {
@@ -202,7 +203,7 @@ canvas.addEventListener('webglcontextlost', e => {
 canvas.addEventListener('webglcontextrestored', () => location.reload());
 
 // —— UI 元素引用（提前到 URL 预置之前） ——
-const slider = $('#slider'), badge = $('#badge');
+const slider = $('#slider'), badge = $('#badge'), targetReading = $('#targetReading');
 const badgeT = badge.querySelector('b'), badgeS = badge.querySelector('span');
 const presetBtns = [...document.querySelectorAll('.preset')];
 function markPresets(near) {
@@ -280,11 +281,11 @@ vec3 worley(vec2 p){
 float web(vec2 p){ vec3 w = worley(p); return 1.0 - smoothstep(0.02, 0.16, w.y - w.x); }
 vec3 skyColor(vec3 rd, vec3 sun){
   float y = max(rd.y, 0.0);
-  vec3 zen  = vec3(0.16, 0.42, 0.78);          // 天顶：饱和蓝，不再灰蒙
-  vec3 hor  = vec3(0.78, 0.90, 0.98);          // 地平线：明亮暖白
-  vec3 c = mix(hor, zen, pow(y, 0.62));
+  vec3 zen = vec3(0.13, 0.34, 0.52);           // 自然青蓝的天顶，避免过度饱和
+  vec3 hor = vec3(0.66, 0.85, 0.91);           // 空气散射后的浅青灰地平线
+  vec3 c = mix(hor, zen, pow(y, 0.73));
   // 近地平线的暖色微光（阳光散射）
-  c = mix(c, vec3(0.98, 0.94, 0.86), (1.0 - smoothstep(0.0, 0.35, y))*0.28);
+  c = mix(c, vec3(0.96, 0.91, 0.83), (1.0 - smoothstep(0.0, 0.35, y))*0.19);
   float sd = max(dot(rd,sun), 0.0);
   c += vec3(1.0,0.83,0.58)*pow(sd,8.0)*0.30;
   c += vec3(1.0,0.90,0.72)*pow(sd,320.0)*5.0;
@@ -327,9 +328,11 @@ const waveDef = [];
   for (let i = 0; i < 22; i++) {
     const t = i / 21;
     const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);   // 波长 7m → ~0.3m
-    const ang = rand() * Math.PI * 2;
+    // 风向占主导，叠加少量横向涌浪；避免完全随机方向形成“沸腾的海面”。
+    const crossSwell = i % 5 === 0;
+    const ang = (crossSwell ? 1.32 : -0.43) + (rand() - 0.5) * (0.48 + t * 1.05);
     const k = 2 * Math.PI / len;
-    const amp = len * 0.014 * (0.7 + rand() * 0.6);
+    const amp = len * (0.010 + rand() * 0.005) * (crossSwell ? 0.55 : 1.0);
     const w = Math.sqrt(9.8 * k) * (0.92 + rand() * 0.16);                    // 深水色散关系
     waveDef.push({ dx: Math.cos(ang), dz: Math.sin(ang), k, amp, w, ph: rand() * 6.28 });
   }
@@ -374,59 +377,72 @@ void main(){
 const FS_WATER = `
 precision highp float;
 uniform vec3 uCam, uSun, uWaterCol, uDeep;
-uniform float uTime, uIce, uSteam, uDeepIce;
+uniform float uTime, uIce, uSteam, uDeepIce, uWarm;
 in vec3 vW; in vec3 vN; in float vH;
 out vec4 outColor;
 ${NOISE}
 void main(){
   vec3 V = normalize(uCam - vW);
-  float e = 0.10;
-  vec2 pd = vW.xz*1.9 + uTime*vec2(0.22,0.17);
-  vec2 g1 = vec2(vnoise(pd+vec2(e,0.0))-vnoise(pd-vec2(e,0.0)),
-                 vnoise(pd+vec2(0.0,e))-vnoise(pd-vec2(0.0,e)))/(2.0*e);
-  vec2 pd2 = vW.xz*5.3 - uTime*vec2(0.31,0.24);
-  vec2 g2 = vec2(vnoise(pd2+vec2(e,0.0))-vnoise(pd2-vec2(e,0.0)),
-                 vnoise(pd2+vec2(0.0,e))-vnoise(pd2-vec2(0.0,e)))/(2.0*e);
-  float detail = mix(0.16, 0.05, uIce)*(1.0 + 0.7*uSteam);
-  vec3 N = normalize(vN + vec3(-g1.x*0.5-g2.x*0.25, 0.0, -g1.y*0.5-g2.y*0.25)*detail);
-
-  float NdV = max(dot(N, V), 0.0);
-  float F = 0.02 + 0.98*pow(1.0-NdV, 5.0);
-  vec3 R = reflect(-V, N);
+  // 以两组反向平流噪声构建波纹微法线；近场微细、远场不出现规则塑料纹。
+  const float e = 0.12;
+  vec2 pd = vW.xz * 1.65 + uTime * vec2(0.17, 0.10);
+  vec2 g1 = vec2(vnoise(pd + vec2(e,0.0)) - vnoise(pd - vec2(e,0.0)),
+                 vnoise(pd + vec2(0.0,e)) - vnoise(pd - vec2(0.0,e))) / (2.0*e);
+  vec2 pd2 = vW.xz * 5.8 - uTime * vec2(0.27, 0.19);
+  vec2 g2 = vec2(vnoise(pd2 + vec2(e,0.0)) - vnoise(pd2 - vec2(e,0.0)),
+                 vnoise(pd2 + vec2(0.0,e)) - vnoise(pd2 - vec2(0.0,e))) / (2.0*e);
+  vec2 capillary = vec2(sin(vW.x*13.2 + vW.z*5.3 + uTime*2.4),
+                        sin(vW.z*15.6 - vW.x*4.1 - uTime*1.8));
+  float waveDetail = mix(0.13, 0.018, uIce) * (1.0 + 0.3*uSteam);
+  vec2 ng = (g1*0.52 + g2*0.18 + capillary*0.065) * waveDetail;
+  vec3 N = normalize(vN + vec3(-ng.x, 0.0, -ng.y));
+  float NdV = clamp(dot(N,V), 0.0, 1.0);
+  // 水的 F0 ≈ 0.0204（空气/水 IOR 1.0 / 1.333），Schlick 随视角增强掠射反射。
+  float fresnel = 0.0204 + 0.9796*pow(1.0-NdV,5.0);
+  vec3 R = reflect(-V,N);
   R.y = abs(R.y)*0.98 + 0.02;
-  vec3 refl = mountains(R, skyColor(R, uSun));
-  float cosSun = max(dot(R, uSun), 0.0);
-  float spec = pow(cosSun, 720.0)*3.5 + pow(cosSun, 64.0)*0.18;
-  float crest = clamp(vH*1.6 + 0.45, 0.0, 1.0);
-  vec3 sss = uWaterCol*(0.20 + 0.55*crest)*0.55;
+  vec3 reflection = mountains(R, skyColor(R,uSun));
+  float sunDot = max(dot(R,uSun),0.0);
+  float specular = pow(sunDot, mix(1050.0,480.0,uSteam))*2.8
+                 + pow(sunDot, mix(110.0,65.0,uSteam))*0.17;
+  float sparkleMask = 0.70 + 0.30*vnoise(vW.xz*8.0 - uTime*vec2(0.19,0.14));
+  specular *= sparkleMask;
 
-  vec3 colW = refl*F + vec3(1.0,0.92,0.75)*spec + sss*(1.0-F);
-  float aW = F;
+  // 水柱透射/体散射近似：保留海床细节，随视线斜率自然增加厚度。
+  float path = 2.35 / clamp(V.y,0.20,1.0);
+  float opticalBody = clamp(1.0-exp(-path*(0.14 + uWarm*0.045 + uSteam*0.07)),0.0,0.77);
+  float crest = smoothstep(-0.12,0.17,vH);
+  vec3 scattered = mix(uWaterCol,uDeep,0.23) * (0.75 + 0.20*crest);
+  float alpha = fresnel + (1.0-fresnel)*opticalBody;
+  // 对 gl.blendFunc(ONE,ONE_MINUS_SRC_ALPHA) 输出预乘透明度。
+  vec3 col = reflection*fresnel
+           + scattered*(1.0-fresnel)*opticalBody
+           + vec3(1.0,0.91,0.74)*specular;
 
-  vec3 col = colW; float alpha = aW;
   if(uIce > 0.001){
-    vec3 w2 = worley(vW.xz*1.35 + 13.7);
-    float cracks = 1.0 - smoothstep(0.015, 0.13, w2.y - w2.x);
-    float frost = fbm(vW.xz*3.1 + 5.0);
-    vec3 iceCol = vec3(0.58,0.78,0.88)*(0.62 + 0.5*frost);
-    iceCol += vec3(0.95,0.99,1.0)*cracks*(0.35 + 0.65*frost)*(1.0 + 0.9*uDeepIce);
-    iceCol = mix(iceCol, vec3(0.80,0.89,0.94)*(0.68 + 0.42*frost), uDeepIce*0.75);
-    float specIce = pow(max(dot(R, uSun), 0.0), 900.0)*0.9;
-    vec2 cellId = floor(vW.xz*26.0);
-    vec2 cellUv = fract(vW.xz*26.0);
-    vec2 sp = hash2(cellId + 3.1);
-    float tw = step(0.995, hash1(cellId + floor(uTime*4.0)))*smoothstep(0.10, 0.0, length(cellUv - sp));
-    vec3 shade = iceCol*(0.55 + 0.45*max(uSun.y,0.0)) + vec3(0.85,0.92,1.0)*specIce + vec3(1.0)*tw*1.2*frost;
-    float aI = clamp(F + 0.55 + uDeepIce*0.35, 0.0, 0.985);
-    col = mix(col, shade*aI, uIce);
-    alpha = mix(alpha, aI, uIce);
+    vec3 cell = worley(vW.xz*1.35+13.7);
+    float cracks = 1.0-smoothstep(0.02,0.12,cell.y-cell.x);
+    float frost = fbm(vW.xz*3.1+5.0);
+    vec3 iceCol = vec3(0.59,0.76,0.84)*(0.68+0.44*frost);
+    iceCol *= 1.0-0.24*cracks;
+    iceCol += vec3(0.91,0.98,1.0)*cracks*0.16;
+    iceCol = mix(iceCol,vec3(0.78,0.88,0.92)*(0.69+0.38*frost),uDeepIce*0.74);
+    float iceSun = pow(sunDot,950.0)*1.2;
+    vec2 cellId = floor(vW.xz*26.0), cellUV = fract(vW.xz*26.0);
+    float tw = step(0.996,hash1(cellId+floor(uTime*3.0)))*
+               (1.0-smoothstep(0.0,0.12,length(cellUV-hash2(cellId+3.1))));
+    vec3 iceLight = iceCol*(0.67+0.28*max(uSun.y,0.0))
+                  + vec3(0.85,0.94,1.0)*iceSun
+                  + vec3(1.0)*tw*0.75*frost;
+    float iceAlpha = clamp(fresnel+0.56+uDeepIce*0.34,0.0,0.985);
+    col = mix(col,iceLight*iceAlpha,uIce);
+    alpha = mix(alpha,iceAlpha,uIce);
   }
-
-  float dist = length(uCam - vW);
-  float fog = 1.0 - exp(-dist*0.055);
-  col = mix(col, uDeep, fog);
-  alpha = mix(alpha, 1.0, fog*0.95);
-  outColor = vec4(col, alpha);
+  float dist = length(uCam-vW);
+  float fog = 1.0-exp(-dist*0.045);
+  col = mix(col,uDeep,fog);
+  alpha = mix(alpha,1.0,fog*0.93);
+  outColor = vec4(col,alpha);
 }`;
 
 // —— 海床：卵石 + 焦散 + 水体吸收
@@ -604,16 +620,16 @@ void main(){
   if(uSunVis > 0.001){
     vec2 dir = uSunUV - uv;
     vec3 acc = vec3(0.0);
-    for(int i=0;i<24;i++){
-      float t = float(i)/23.0;
+    for(int i=0;i<12;i++){
+      float t = float(i)/11.0;
       acc += max(texture(uTex, uv + dir*t*0.6).rgb - thr, 0.0)*(1.0-t);
     }
-    col += acc/24.0*1.6*uSunVis;
+    col += acc/12.0*1.32*uSunVis;
     vec3 s2 = vec3(0.0);
-    for(int i=-10;i<=10;i++){
-      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.012, 0.0)).rgb - thr, 0.0);
+    for(int i=-3;i<=3;i++){
+      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.027, 0.0)).rgb - thr, 0.0);
     }
-    col += s2/21.0*0.5*uSunVis;
+    col += s2/7.0*0.28*uSunVis;
   }
 
   col *= 1.05;
@@ -622,7 +638,7 @@ void main(){
   vec2 q = vUv - 0.5;
   float vig = 1.0 - (0.45 - 0.05*uIdle)*dot(q,q);
   col *= vig;
-  float grain = (hash1(gl_FragCoord.xy + uTime) - 0.5)*(0.012 + 0.008*uIdle);
+  float grain = (hash1(gl_FragCoord.xy + floor(uTime*12.0)) - 0.5)*(0.005 + 0.002*uIdle);
   col += grain;
   outColor = vec4(col, 1.0);
 }`;
@@ -731,26 +747,40 @@ const snowVAO = (() => {
 
 /* ================= 场景 FBO ================= */
 let sceneFBO = null, fboW = 0, fboH = 0;
-const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
 let resAdj = 1.0;
 function makeFBO(w, h) {
-  if (sceneFBO) { gl.deleteTexture(sceneFBO.tex); gl.deleteFramebuffer(sceneFBO.fb); }
+  if (sceneFBO) {
+    gl.deleteTexture(sceneFBO.tex);
+    gl.deleteRenderbuffer(sceneFBO.depth);
+    gl.deleteFramebuffer(sceneFBO.fb);
+  }
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   if (extHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
   else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const filter = extHDR && !floatLinear ? gl.NEAREST : gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   const fb = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  // 离屏目标必须有深度缓冲，否则海床、水面与粒子的遮挡测试失效。
+  const depth = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  sceneFBO = { tex, fb };
+  if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Scene framebuffer incomplete: ' + status);
+  sceneFBO = { tex, fb, depth };
   fboW = w; fboH = h;
 }
 function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 1.75);
   const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
   const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -783,10 +813,13 @@ let lastActive = 0;                     // 上次交互的 simTime
   if (s === 'ice') targetTemp = dispTemp = -36;
   else if (s === 'steam') targetTemp = dispTemp = 130;
   else if (s === 'water') targetTemp = dispTemp = 24;
-  if (s) {
-    slider.value = targetTemp;
-    markPresets(targetTemp);
+  else if (params.has('temp')) {
+    const custom = Number(params.get('temp'));
+    if (Number.isFinite(custom)) targetTemp = dispTemp = clamp(custom,-36,150);
   }
+  slider.value = String(targetTemp);
+  targetReading.textContent = Math.round(targetTemp) + '°C';
+  markPresets([-36,24,130].includes(targetTemp) ? targetTemp : NaN);
   if (params.get('ui') === '0') ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('hidden'));
 }
 
@@ -879,10 +912,12 @@ presetBtns.forEach(b => b.addEventListener('click', () => setTemp(+b.dataset.t, 
 function setTemp(t, fromPreset) {
   targetTemp = t;
   lastActive = simTime;
-  // 地址栏同步：预设写入 ?state=，滑杆自由值则移除该参数（可分享当前状态）
+  targetReading.textContent = Math.round(t) + '°C';
+  // 预设分享相态，自由温度写入 temp，刷新或分享链接均能复现。
   const st = { '-36': 'ice', '24': 'water', '130': 'steam' }[String(t)];
   const url = new URL(location.href);
-  if (st) url.searchParams.set('state', st); else url.searchParams.delete('state');
+  if (st) { url.searchParams.set('state', st); url.searchParams.delete('temp'); }
+  else { url.searchParams.delete('state'); url.searchParams.set('temp', String(t)); }
   history.replaceState(null, '', url);
   if (fromPreset) {
     slider.value = t;
@@ -920,8 +955,8 @@ function updateUI() {
     lastPhase = name;
     badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
   }
-  const near = [ -36, 24, 130 ].reduce((a, b) => Math.abs(b - targetTemp) < Math.abs(a - targetTemp) ? b : a);
-  if (near !== lastNear) { lastNear = near; markPresets(near); }
+  const exactPreset = [-36,24,130].includes(targetTemp) ? targetTemp : 'custom';
+  if (exactPreset !== lastNear) { lastNear = exactPreset; markPresets(exactPreset); }
 }
 
 /* ================= 渲染 ================= */
@@ -952,7 +987,7 @@ function render() {
   const roll = clamp(yawV * 0.045, -0.05, 0.05);
   const B = rollBasis(camBasis(yaw, pitch + leanP), roll);
   const asp = canvas.width / canvas.height;
-  const view = m4View(CAM_POS, B);
+  const view = m4View(camPos, B);
   const proj = m4Persp(FOV, asp, 0.1, 120);
   const VP = m4Mul(proj, view);
 
@@ -1011,6 +1046,7 @@ function render() {
   gl.uniform1f(U(progWater, 'uSteam'), P.steam);
   gl.uniform1f(U(progWater, 'uIce'), P.ice);
   gl.uniform1f(U(progWater, 'uDeepIce'), P.deepIce);
+  gl.uniform1f(U(progWater, 'uWarm'), P.warm);
   gl.uniform3f(U(progWater, 'uWaterCol'), P.waterCol[0], P.waterCol[1], P.waterCol[2]);
   gl.uniform3f(U(progWater, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
   gl.uniform4fv(U(progWater, 'uRipple'), ripples);
