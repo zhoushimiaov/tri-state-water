@@ -223,7 +223,7 @@ function markPresets(near) {
 
 const params = new URLSearchParams(location.search);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-// Auto may select the light mesh on small low-core devices; explicit choices always win.
+// Explicit modes always override automatic device-based quality selection.
 const requestedQuality = params.get('quality');
 const qualityMode = requestedQuality === 'low' || requestedQuality === 'high' ? requestedQuality : 'auto';
 // CPU core count is not a reliable GPU-performance proxy. Mobile/tablet coarse
@@ -390,7 +390,7 @@ void main(){
       float env = exp(-front*front*3.5)*exp(-age*1.3)*r.w;
       h += env*cos(front*8.0);
       // d/d(distance): temporal damping exp(-age*1.3) is constant in space.
-       float dhdd = env*(-7.0*front*cos(front*8.0) - 8.0*sin(front*8.0));
+      float dhdd = env*(-7.0*front*cos(front*8.0) - 8.0*sin(front*8.0));
       grad += (dhdd/d)*dv;
     }
   }
