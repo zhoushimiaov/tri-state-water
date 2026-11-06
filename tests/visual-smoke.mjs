@@ -38,6 +38,9 @@ async function checkScene(state, screenshot) {
 
 try {
   await checkScene('water', 'water-desktop.png');
+  const low = await page.evaluate(() => ({mode:qualityMode,mesh:waterVAO.count,scale:resAdj,low:LOW_QUALITY}));
+  assert.deepEqual(low, {mode:'low', mesh:140*140*6, scale:0.7, low:true},
+    'Explicit low quality must pin mesh and resolution');
   await checkScene('ice', 'ice-desktop.png');
   await checkScene('steam', 'steam-desktop.png');
 
@@ -83,10 +86,34 @@ try {
   await page.setViewportSize({ width: 640, height: 400 });
   await page.goto('http://127.0.0.1:4173/?quality=high&state=water', { waitUntil:'domcontentloaded' });
   await page.waitForFunction(() => window.__frames > 4, null, { timeout: 90000 });
+  const high = await page.evaluate(() => ({mode:qualityMode,mesh:waterVAO.count,scale:resAdj,low:LOW_QUALITY}));
+  assert.deepEqual(high, {mode:'high',mesh:300*300*6,scale:1,low:false},
+    'Explicit high quality must pin full mesh and resolution');
   assert.equal(await page.evaluate(() => window.__lastError || ''), '');
   await page.evaluate(() => { window.__suspendRendering = true; });
   await page.waitForTimeout(120);
   await page.screenshot({ path: 'screenshots/water-high-quality.png', timeout: 90000, animations: 'disabled' });
+  // Explicit high quality must override small-screen low-core autodetection.
+  await page.setViewportSize({width:350,height:740});
+  await page.goto('http://127.0.0.1:4173/?quality=high&state=water', {waitUntil:'domcontentloaded'});
+  await page.waitForFunction(() => window.__frames > 4, null, {timeout:90000});
+  assert.equal(await page.evaluate(() => LOW_QUALITY), false);
+  assert.equal(await page.evaluate(() => qualityMode), 'high');
+
+  // Reduced motion stops time-based animation, and an idle scene must not redraw every frame.
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto('http://127.0.0.1:4173/?quality=low&state=water', {waitUntil:'domcontentloaded'});
+  await page.waitForFunction(() => window.__frames > 4, null, {timeout:60000});
+  const initialReduced = await page.evaluate(() => ({sim:simTime, renders:window.__renderCount}));
+  await page.waitForTimeout(250);
+  const laterReduced = await page.evaluate(() => ({sim:simTime,renders:window.__renderCount}));
+  assert.equal(laterReduced.sim, 0, 'Reduced motion simulation clock must remain frozen');
+  assert.equal(laterReduced.renders, initialReduced.renders, 'Reduced motion should avoid idle GPU work');
+  await page.locator('.preset[data-t="130"]').click();
+  await page.waitForTimeout(120);
+  assert.ok(await page.evaluate(() => window.__renderCount) > laterReduced.renders,
+    'Reduced motion must still render after user interaction');
+
   assert.deepEqual(errors, [], 'Unexpected page errors');
   console.log('WebGL/browser smoke tests passed.');
 } finally {
