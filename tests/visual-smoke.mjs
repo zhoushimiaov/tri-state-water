@@ -100,6 +100,15 @@ try {
   assert.equal(await page.evaluate(() => LOW_QUALITY), false);
   assert.equal(await page.evaluate(() => qualityMode), 'high');
 
+  // Auto on narrow devices must select the affordable mesh regardless of CPU core count.
+  await page.goto('http://127.0.0.1:4173/?state=water', {waitUntil:'domcontentloaded'});
+  await page.waitForFunction(() => window.__frames > 4, null, {timeout:60000});
+  const autoMobile = await page.evaluate(() => ({
+    mode:qualityMode,low:LOW_QUALITY,mesh:waterVAO.count
+  }));
+  assert.deepEqual(autoMobile, {mode:'auto',low:true,mesh:140*140*6},
+    'Auto mode should use a mobile-safe mesh on narrow screens');
+
   // Reduced motion stops time-based animation, and an idle scene must not redraw every frame.
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto('http://127.0.0.1:4173/?quality=low&state=water', {waitUntil:'domcontentloaded'});
