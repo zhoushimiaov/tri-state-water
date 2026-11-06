@@ -183,6 +183,7 @@
 <script>
 'use strict';
 window.__frames = 0;
+window.__renderCount = 0; // GPU draw counter for browser regression tests
 window.__suspendRendering = false; // 截图/浏览器测试可暂停 GPU 绘制，保留最后一帧
 window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
 /* ================= 基础工具 ================= */
@@ -1035,6 +1036,7 @@ function updateQuality(dt) {
 }
 
 function render() {
+  window.__renderCount++;
   resize();
   // 速度耦合倾斜：俯仰随角速度轻微前倾/后仰，横滚随偏航速度侧倾（松手滑行时最明显）
   const leanP = dragging ? 0 : clamp(-pitchV * 0.030, -0.055, 0.055);
