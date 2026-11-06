@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#04141a">
 <meta name="description" content="三态之水 Tri-State Water —— 单文件零依赖的 WebGL2 实时水场景，温度驱动冰 / 水 / 汽三态连续相变。">
 <title>三态之水 · Tri-State Water</title>
@@ -183,6 +183,7 @@
 <script>
 'use strict';
 window.__frames = 0;
+window.__renderCount = 0; // GPU draw counter for browser regression tests
 window.__suspendRendering = false; // 截图/浏览器测试可暂停 GPU 绘制，保留最后一帧
 window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
 /* ================= 基础工具 ================= */
@@ -222,8 +223,14 @@ function markPresets(near) {
 
 const params = new URLSearchParams(location.search);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const LOW_QUALITY = params.get('quality') === 'low' ||
-  (window.matchMedia('(max-width: 640px)').matches && (navigator.hardwareConcurrency || 4) <= 4);
+// Explicit modes always override automatic device-based quality selection.
+const requestedQuality = params.get('quality');
+const qualityMode = requestedQuality === 'low' || requestedQuality === 'high' ? requestedQuality : 'auto';
+// CPU core count is not a reliable GPU-performance proxy. Mobile/tablet coarse
+// pointers and narrow viewports default to the inexpensive mesh in auto mode.
+const autoLightDevice = window.matchMedia('(max-width: 640px)').matches ||
+  (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1024px)').matches);
+const LOW_QUALITY = qualityMode === 'low' || (qualityMode === 'auto' && autoLightDevice);
 const DEBUG = params.has('debug');
 if (DEBUG) $('#fps').style.display = 'block';
 
@@ -382,14 +389,21 @@ void main(){
       float front = d - age*2.2;
       float env = exp(-front*front*3.5)*exp(-age*1.3)*r.w;
       h += env*cos(front*8.0);
-      float dhdd = env*(-7.0*front-1.3)*cos(front*8.0) - env*sin(front*8.0)*8.0;
+      // d/d(distance): temporal damping exp(-age*1.3) is constant in space.
+      float dhdd = env*(-7.0*front*cos(front*8.0) - 8.0*sin(front*8.0));
       grad += (dhdd/d)*dv;
     }
   }
-  // Fade distant geometry displacement to avoid undersampling at grazing angles.
-  float farFade = mix(0.14, 1.0, 1.0-smoothstep(12.0, 29.0, length(p-uCam.xz)));
+  // The normal must differentiate BOTH the base height and the distance-based fade:
+  // d(h * fade)/dp = dh/dp * fade + h * d(fade)/dp.
+  vec2 fromCam = p - uCam.xz;
+  float farDistance = length(fromCam);
+  float fadeT = clamp((farDistance - 12.0) / 17.0, 0.0, 1.0);
+  float farFade = 1.0 - 0.86*(fadeT*fadeT*(3.0 - 2.0*fadeT));
+  float fadeSlope = -0.86 * (6.0*fadeT*(1.0-fadeT)) / 17.0;
+  vec2 fadeGradient = fadeSlope * fromCam / max(farDistance, 0.0001);
+  grad = uWaveAmp * (grad*farFade + h*fadeGradient);
   h *= uWaveAmp*farFade;
-  grad *= uWaveAmp*farFade;
   vec3 wp = vec3(p.x, h, p.y);
   vW = wp; vN = vec3(-grad.x, 1.0, -grad.y); vH = h;
   gl_Position = uVP*vec4(wp, 1.0);
@@ -873,7 +887,8 @@ function updateStateParams() {
   const t = dispTemp;
   const ice = ssj(1.5, -4, t);
   const deepIce = ssj(-10, -34, t);
-  const steam = ssj(72, 108, t) * (1 - ice);
+  // Begin visible vapor close to boiling instead of as early as 72°C.
+  const steam = ssj(92, 108, t) * (1 - ice);
   const warm = ssj(35, 95, t) * (1 - steam);
   const snow = ssj(-3, -13, t);
   const mix3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
@@ -1010,6 +1025,8 @@ function setCommon(p, B, VP) {
 
 let ema = 16, qTimer = 0;
 function updateQuality(dt) {
+  // Manual modes are stable presets; only auto changes resolution under load.
+  if (qualityMode !== 'auto') return;
   qTimer += dt;
   if (qTimer > 1.6) {
     qTimer = 0;
@@ -1021,6 +1038,7 @@ function updateQuality(dt) {
 }
 
 function render() {
+  window.__renderCount++;
   resize();
   // 速度耦合倾斜：俯仰随角速度轻微前倾/后仰，横滚随偏航速度侧倾（松手滑行时最明显）
   const leanP = dragging ? 0 : clamp(-pitchV * 0.030, -0.055, 0.055);
@@ -1148,7 +1166,7 @@ updateStateParams();
 icePrev = P.ice;
 steamPrev = P.steam;
 resize();
-let last = performance.now(), fpsAcc = 0, fpsN = 0;
+let last = performance.now(), fpsAcc = 0, fpsN = 0, lastReducedDraw = -Infinity;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
@@ -1202,16 +1220,25 @@ function frame(now) {
   // —— idle 呼吸：静止 3 秒后缓慢升起 ——
   const quiet = simTime - lastActive;
   idleAmt = clamp((quiet - 3) / 5, 0, 1);
-  if (idleAmt > 0) idleClock += dt * (1 + idleAmt);
-  // 相机轻微漂浮 + 水面波幅微呼吸（乘进 uWaveAmp，见 render）
-  const drift = idleAmt * 0.5;
+  if (!reducedMotion.matches && idleAmt > 0) idleClock += dt * (1 + idleAmt);
+  // Reduced motion disables idle camera drift, not temperature or pointer interaction.
+  const drift = reducedMotion.matches ? 0 : idleAmt * 0.5;
   camPos[0] = CAM_POS[0] + Math.sin(idleClock * 0.21) * drift * 0.30;
   camPos[1] = CAM_POS[1] + Math.sin(idleClock * 0.17 + 1.3) * drift * 0.14;
   camPos[2] = CAM_POS[2] * (1 + zoom * 0.9) + Math.cos(idleClock * 0.13) * drift * 0.30;
 
   if (!document.hidden) {
     updateQuality(dt);
-    if (!window.__suspendRendering) render();
+    // When reduced motion is requested, redraw at most once per second while idle;
+    // continue rendering interactively during temperature changes, drag or zoom.
+    const changing = Math.abs(targetTemp - dispTemp) > 0.05 ||
+      dragging || Math.abs(yawV) > 0.004 || Math.abs(pitchV) > 0.004 ||
+      Math.abs(zoomV) > 0.01;
+    if (!window.__suspendRendering &&
+        (!reducedMotion.matches || changing || now - lastReducedDraw > 1000)) {
+      render();
+      lastReducedDraw = now;
+    }
     updateUI();
   }
   window.__frames++;

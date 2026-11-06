@@ -19,6 +19,8 @@ jobs:
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
+      - name: Check analytical wave normals against finite differences
+        run: node tests/wave-derivative-check.mjs
       - name: Validate HTML script syntax
         run: |
           node -e "const fs=require('fs');const x=fs.readFileSync('index.html','utf8');const a=x.indexOf('<script>'),b=x.lastIndexOf('</script>');if(a<0||b<=a)throw Error('missing inline script');new Function(x.slice(a+8,b));"
