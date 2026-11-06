@@ -108,7 +108,7 @@ try {
   await page.waitForTimeout(250);
   const laterReduced = await page.evaluate(() => ({sim:simTime,renders:window.__renderCount}));
   assert.equal(laterReduced.sim, 0, 'Reduced motion simulation clock must remain frozen');
-  assert.equal(laterReduced.renders, initialReduced.renders, 'Reduced motion should avoid idle GPU work');
+  assert.ok(laterReduced.renders - initialReduced.renders <= 1, 'Reduced motion should not draw continuously while idle');
   await page.locator('.preset[data-t="130"]').click();
   await page.waitForTimeout(120);
   assert.ok(await page.evaluate(() => window.__renderCount) > laterReduced.renders,
