@@ -226,9 +226,11 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 // Auto may select the light mesh on small low-core devices; explicit choices always win.
 const requestedQuality = params.get('quality');
 const qualityMode = requestedQuality === 'low' || requestedQuality === 'high' ? requestedQuality : 'auto';
-const LOW_QUALITY = qualityMode === 'low' ||
-  (qualityMode === 'auto' && window.matchMedia('(max-width: 640px)').matches &&
-   (navigator.hardwareConcurrency || 4) <= 4);
+// CPU core count is not a reliable GPU-performance proxy. Mobile/tablet coarse
+// pointers and narrow viewports default to the inexpensive mesh in auto mode.
+const autoLightDevice = window.matchMedia('(max-width: 640px)').matches ||
+  (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1024px)').matches);
+const LOW_QUALITY = qualityMode === 'low' || (qualityMode === 'auto' && autoLightDevice);
 const DEBUG = params.has('debug');
 if (DEBUG) $('#fps').style.display = 'block';
 
