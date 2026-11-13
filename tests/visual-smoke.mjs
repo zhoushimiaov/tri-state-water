@@ -57,15 +57,15 @@ try {
     element.value = '68';
     element.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  assert.equal(await page.locator('#targetReading').textContent(), '68°C');
+  assert.equal(await page.locator('#targetReading').textContent(), '68.0 °C');
   assert.ok(page.url().includes('temp=68'), 'Custom temperature missing from shareable URL');
   await page.reload({ waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('#slider').inputValue(), '68');
-  await page.locator('.preset[data-t="130"]').click();
-  assert.equal(await page.locator('#slider').inputValue(), '130');
-  assert.equal(await page.locator('.preset[data-t="130"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('.preset[data-temp="160"]').click();
+  assert.equal(await page.locator('#slider').inputValue(), '160');
+  assert.equal(await page.locator('.preset[data-temp="160"]').getAttribute('aria-pressed'), 'true');
 
-  await page.locator('.preset[data-t="24"]').click();
+  await page.locator('.preset[data-temp="25"]').click();
   await page.waitForTimeout(350);
   await page.setViewportSize({ width: 350, height: 740 });
   await page.screenshot({ path: 'screenshots/water-small-mobile.png', animations: 'disabled', timeout: 90000 });
@@ -82,12 +82,12 @@ try {
   assert.equal(await page.locator('#panel').evaluate(el => el.inert), true);
   assert.equal(new URL(page.url()).searchParams.get('ui'), '0');
 
-  // Full-quality shaders and 300x300 mesh must also compile and draw in headless WebGL.
+  // Full-quality shaders and 220x220 mesh must also compile and draw in headless WebGL.
   await page.setViewportSize({ width: 640, height: 400 });
   await page.goto('http://127.0.0.1:4173/?quality=high&state=water', { waitUntil:'domcontentloaded' });
   await page.waitForFunction(() => window.__frames > 4, null, { timeout: 90000 });
   const high = await page.evaluate(() => ({mode:qualityMode,mesh:waterVAO.count,scale:resAdj,low:LOW_QUALITY}));
-  assert.deepEqual(high, {mode:'high',mesh:300*300*6,scale:1,low:false},
+  assert.deepEqual(high, {mode:'high',mesh:220*220*6,scale:1,low:false},
     'Explicit high quality must pin full mesh and resolution');
   assert.equal(await page.evaluate(() => window.__lastError || ''), '');
   await page.evaluate(() => { window.__suspendRendering = true; });
@@ -118,7 +118,7 @@ try {
   const laterReduced = await page.evaluate(() => ({sim:simTime,renders:window.__renderCount}));
   assert.equal(laterReduced.sim, 0, 'Reduced motion simulation clock must remain frozen');
   assert.ok(laterReduced.renders - initialReduced.renders <= 1, 'Reduced motion should not draw continuously while idle');
-  await page.locator('.preset[data-t="130"]').click();
+  await page.locator('.preset[data-temp="160"]').click();
   await page.waitForTimeout(120);
   assert.ok(await page.evaluate(() => window.__renderCount) > laterReduced.renders,
     'Reduced motion must still render after user interaction');

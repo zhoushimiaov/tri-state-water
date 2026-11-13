@@ -1149,7 +1149,9 @@
     function syncPresetButtons(t) {
       for (const btn of presetBtns) {
         const p = Number(btn.dataset.temp);
-        btn.classList.toggle('on', Math.abs(t - p) < 0.35);
+        const active = Math.abs(t - p) < 0.35;
+        btn.classList.toggle('on', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       }
     }
 
@@ -1198,13 +1200,15 @@
       targetReading.textContent = targetTemp.toFixed(1) + ' °C';
       syncPresetButtons(targetTemp);
       if (updateHistory) updateURLState(targetTemp);
+      needsRender = true;
     }
 
+    let needsRender = true;
     setTargetTemp(targetTemp, true, false);
     updateTelemetryHUD(curTemp);
 
     slider.addEventListener('input', () => {
-      setTargetTemp(Number(slider.value), false, false);
+      setTargetTemp(Number(slider.value), false, true);
     });
     slider.addEventListener('change', () => {
       updateURLState(targetTemp);
@@ -2122,6 +2126,7 @@
         fboScene = makeFBO(w, h);
         fboRefract = makeFBO(w, h);
       }
+      needsRender = true;
     }
 
     window.addEventListener('resize', resize);
@@ -2141,12 +2146,14 @@
       waterVAO = buildGridVAO(LOW_QUALITY ? 140 : 220, 28.0);
       syncQualityUI();
       resize();
+      needsRender = true;
     });
 
     btnSunCycle.addEventListener('click', () => {
       sunPresetIdx = (sunPresetIdx + 1) % SUN_PRESETS.length;
       targetSunDir = normalize3(SUN_PRESETS[sunPresetIdx].dir.slice());
       sunLabel.textContent = SUN_PRESETS[sunPresetIdx].name;
+      needsRender = true;
     });
 
     // =========================================================================
@@ -2164,6 +2171,7 @@
       ripples[idx + 2] = simTime;
       ripples[idx + 3] = strength;
       rippleHead++;
+      needsRender = true;
     }
 
     btnDropRipple.addEventListener('click', () => {
@@ -2288,6 +2296,7 @@
       if (pointerMoved) {
         targetYaw -= dx * 0.0055;
         targetPitch = clamp(targetPitch + dy * 0.0045, 0.14, 1.18);
+        needsRender = true;
       }
     });
 
@@ -2306,6 +2315,7 @@
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       targetDist = clamp(targetDist + e.deltaY * 0.006, 4.2, 16.5);
+      needsRender = true;
     }, { passive: false });
 
     // UI Visibility Toggle (H Key & Toolbar Button)
@@ -2325,6 +2335,12 @@
     function toggleUI() {
       uiHidden = !uiHidden;
       applyUIVisibility();
+      try {
+        const u = new URL(location.href);
+        if (uiHidden) u.searchParams.set('ui', '0');
+        else u.searchParams.delete('ui');
+        history.replaceState(null, '', u);
+      } catch (_) {}
     }
 
     btnToggleUI.addEventListener('click', toggleUI);
@@ -2353,25 +2369,36 @@
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) * 0.001));
       lastTime = now;
 
-      if (!reducedMotion) {
+      if (reducedMotion) {
+        window.__frames++;
+        if (!needsRender) return;
+        needsRender = false;
+        curTemp = targetTemp;
+        dispTemp = targetTemp;
+        sunDir = targetSunDir.slice();
+        yaw = targetYaw;
+        pitch = targetPitch;
+        dist = targetDist;
+        updateTelemetryHUD(dispTemp);
+      } else {
         simTime += dt;
+
+        const tempRate = 1.0 - Math.exp(-dt * 4.8);
+        curTemp += (targetTemp - curTemp) * tempRate;
+        dispTemp += (curTemp - dispTemp) * (1.0 - Math.exp(-dt * 10.0));
+        updateTelemetryHUD(dispTemp);
+
+        for (let i = 0; i < 3; i++) {
+          sunDir[i] += (targetSunDir[i] - sunDir[i]) * (1.0 - Math.exp(-dt * 5.0));
+        }
+        sunDir = normalize3(sunDir);
+
+        const camLerp = 1.0 - Math.exp(-dt * 9.0);
+        const idleDrift = !pointerDown ? Math.sin(simTime * 0.28) * 0.0004 : 0;
+        yaw += (targetYaw - yaw) * camLerp + idleDrift;
+        pitch += (targetPitch - pitch) * camLerp;
+        dist += (targetDist - dist) * camLerp;
       }
-
-      const tempRate = reducedMotion ? 1.0 : (1.0 - Math.exp(-dt * 4.8));
-      curTemp += (targetTemp - curTemp) * tempRate;
-      dispTemp += (curTemp - dispTemp) * (1.0 - Math.exp(-dt * 10.0));
-      updateTelemetryHUD(dispTemp);
-
-      for (let i = 0; i < 3; i++) {
-        sunDir[i] += (targetSunDir[i] - sunDir[i]) * (1.0 - Math.exp(-dt * 5.0));
-      }
-      sunDir = normalize3(sunDir);
-
-      const camLerp = 1.0 - Math.exp(-dt * 9.0);
-      const idleDrift = (!pointerDown && !reducedMotion) ? Math.sin(simTime * 0.28) * 0.0004 : 0;
-      yaw += (targetYaw - yaw) * camLerp + idleDrift;
-      pitch += (targetPitch - pitch) * camLerp;
-      dist += (targetDist - dist) * camLerp;
 
       const w = canvas.width, h = canvas.height;
       const aspect = w / Math.max(1, h);
@@ -2533,7 +2560,7 @@
       gl.uniform2f(progPost.u.uShakeDir, 1.0, 0.0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-      window.__frames++;
+      if (!reducedMotion) window.__frames++;
       window.__renderCount++;
 
       if (DEBUG) {
