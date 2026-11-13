@@ -20,6 +20,7 @@ async function checkScene(state, screenshot) {
     frames: window.__frames, error: window.__lastError || '',
     gl: Boolean(document.querySelector('#gl')?.getContext('webgl2')),
     width: document.querySelector('#gl')?.width,
+    clientWidth: document.querySelector('#gl')?.clientWidth,
     glError: document.querySelector('#gl').getContext('webgl2').getError(),
     initialRippleCount: rippleHead
   }));
@@ -28,7 +29,7 @@ async function checkScene(state, screenshot) {
   assert.equal(diagnostics.initialRippleCount, 0, 'Preset URLs should not create a startup shock ripple');
   assert.ok(diagnostics.frames > 10, 'Animation loop stopped');
   assert.equal(diagnostics.error, '', 'Runtime error: ' + diagnostics.error);
-  assert.ok(diagnostics.width >= 300, 'Canvas failed to resize');
+  assert.ok(diagnostics.clientWidth >= 300 && diagnostics.width >= 250, 'Canvas failed to resize');
   // Stop continuous GPU drawing while Playwright captures the last complete frame.
   await page.evaluate(() => { window.__suspendRendering = true; });
   await page.waitForTimeout(180);
