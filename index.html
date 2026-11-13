@@ -3,1248 +3,2551 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#04141a">
-<meta name="description" content="三态之水 Tri-State Water —— 单文件零依赖的 WebGL2 实时水场景，温度驱动冰 / 水 / 汽三态连续相变。">
+<meta name="theme-color" content="#041016">
+<meta name="description" content="三态之水 Tri-State Water — 单文件零依赖的 WebGL2 实时水场景，温度驱动冰 / 水 / 汽三态连续相变。">
 <title>三态之水 · Tri-State Water</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
 <!--
-  三态之水 (Tri-State Water)
-  ------------------------------------------------------------
-  视觉与技术路线复刻自开源项目 clearwater (github.com/Aureliengmz/clearwater, MIT)
-  —— 浅水碧波 + 水底焦散 + 太阳眩光 + 交互涟漪 的实时 WebGL2 场景。
-  本文件为从零手写的独立实现，并新增“温度三态”系统：
-    凝固态(冰) / 液态(水) / 蒸发态(汽)，由温度滑杆连续驱动。
+  三态之水 (Tri-State Water) · Backgrounds Supply (Gradient Lab) 光学磨砂玻璃与 Satoshi 字体体系版
+  --------------------------------------------------
+  1. 字体与小字按钮美学 (Satoshi + Geist Mono)：
+     - 严格对齐 backgrounds.supply/gradient-lab 的 Satoshi 几何无衬线字体体系
+     - 小字按钮 (`.preset` / `.gl-chip`): 11px Satoshi Weight 500，8px 圆角，rgba(255,255,255,0.04) 填充 + 1px rgba(255,255,255,0.08) 极细微边；激活态为 rgba(255,255,255,0.92) 纯净柔白磁贴
+     - 分区标签 (`.field-label`): 10px Satoshi Weight 500，letter-spacing 0.1em，rgba(255,255,255,0.5)
+  2. 毛玻璃磨砂质感 (Smoky Matte Frosted Glass)：
+     - 浮动胶囊栏：rgba(0,0,0,0.38) + backdrop-filter: blur(14px) + 1px solid rgba(255,255,255,0.08)，零脏阴影
+     - 底部控制面板：rgba(0,0,0,0.45) + backdrop-filter: blur(18px) + 1px solid rgba(255,255,255,0.06)，16px 圆角
+  3. 水面物理与光学管线：
+     - 浅水碧波 + 真实双Pass屏幕空间色散折射 + 比尔-朗伯(Beer-Lambert)光谱吸收
+     - 雅可比焦散网络 + 双瓣GGX太阳高光 + 冰裂视差/沸腾空化泡沫 的实时 WebGL2 场景。
   无依赖 · 无构建 · 单文件。直接用浏览器打开即可。
 -->
 <style>
   :root {
     color-scheme: dark;
-    --ink:#f4f7f7; --dim:#b8c8cb; --quiet:#8ea4aa;
-    --line:rgba(233,250,252,.14); --panel:rgba(8,25,31,.76);
-    --focus:#a7e7fa;
-    --font:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-    --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-    --accent:#88ebdb;
+    --bg: #030d12;
+    --ink: #ffffff;
+    --ink-muted: rgba(255, 255, 255, 0.72);
+    --ink-subtle: rgba(255, 255, 255, 0.50);
+    --ink-faint: rgba(255, 255, 255, 0.34);
+
+    /* Backgrounds Supply / Gradient Lab Exact Frosted Glass Tokens */
+    --glass-panel: rgba(0, 0, 0, 0.45);
+    --glass-panel-border: rgba(255, 255, 255, 0.06);
+    --glass-pill: rgba(0, 0, 0, 0.38);
+    --glass-pill-border: rgba(255, 255, 255, 0.08);
+    --chip-bg: rgba(255, 255, 255, 0.04);
+    --chip-bg-hover: rgba(255, 255, 255, 0.08);
+    --chip-border: rgba(255, 255, 255, 0.08);
+    --chip-active-bg: rgba(255, 255, 255, 0.92);
+    --chip-active-ink: #0a0c0e;
+
+    --focus: rgba(255, 255, 255, 0.45);
+    --state: #7ce8d8;
+    --font: 'Satoshi', 'Geist', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
   }
-  * { box-sizing:border-box; }
-  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#071b24;
-    color:var(--ink); font-family:var(--font); -webkit-font-smoothing:antialiased; }
-  #gl { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none; }
-  body::after { content:''; position:fixed; inset:0; z-index:1; pointer-events:none;
-    background:linear-gradient(180deg,rgba(3,20,28,.29),transparent 30%,transparent 78%,rgba(3,20,28,.10)); }
-  button,input { font:inherit; }
-  :focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
-  .hidden { display:none !important; }
-  #title { position:fixed; left:clamp(22px,3.4vw,58px); top:clamp(22px,4.3vh,48px);
-    z-index:5; max-width:min(440px,calc(100vw - 40px)); pointer-events:none; user-select:none;
-    filter:drop-shadow(0 2px 12px rgba(1,11,18,.5)); }
-  #title .eyebrow { display:flex; align-items:center; gap:12px; margin-bottom:14px;
-    color:#d0edf0; font:500 10px/1.3 var(--mono); letter-spacing:.17em; text-transform:uppercase; }
-  #title .eyebrow::before { content:''; width:25px; height:1px; background:var(--accent); }
-  #title b { display:block; font-size:clamp(29px,3vw,43px); line-height:1.06; font-weight:500;
-    letter-spacing:-.055em; }
-  #title span { display:block; margin-top:11px; color:#d1dee0; font-size:12px;
-    line-height:1.6; letter-spacing:.06em; }
-  #hint { position:fixed; right:clamp(22px,3.4vw,58px); top:clamp(24px,4.5vh,50px); z-index:5;
-    color:#d7e9eb; font-size:12px; font-weight:400; line-height:2;
-    text-align:right; text-shadow:0 2px 12px rgba(1,11,18,.65); user-select:none; pointer-events:none; }
-  #hint .hint-heading { font:500 10px/1.5 var(--mono); letter-spacing:.16em;
-    color:#effffc; margin-bottom:9px; }
-  #hint kbd { display:inline-block; font:500 10px/1.45 var(--mono); color:var(--ink);
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.26); background:rgba(5,17,22,.4);
-    border-radius:4px; padding:2px 6px; margin-inline:2px; }
-  #panel { position:fixed; left:50%; bottom:clamp(14px,3.8vh,38px); transform:translateX(-50%);
-    z-index:10; display:grid; grid-template-columns:auto minmax(220px,1fr) auto;
-    align-items:center; gap:26px; width:min(890px,calc(100vw - 36px)); padding:19px 24px;
-    background:var(--panel); border:1px solid var(--line); border-radius:16px;
-    box-shadow:0 22px 70px rgba(1,12,17,.33), inset 0 1px 0 rgba(255,255,255,.075);
-    backdrop-filter:blur(24px) saturate(1.22); -webkit-backdrop-filter:blur(24px) saturate(1.22);
-    user-select:none; }
-  #panel::before { content:''; position:absolute; left:24px; right:24px; top:0;
-    height:1px; background:linear-gradient(90deg,transparent,rgba(237,255,255,.22),transparent);
-    pointer-events:none; }
-  .field-label { display:block; margin-bottom:12px; font:500 10px/1.3 var(--mono);
-    color:#b4cdd2; text-transform:uppercase; letter-spacing:.13em; }
-  .presetRow { display:flex; gap:5px; padding:4px; background:rgba(0,13,18,.36);
-    border:1px solid rgba(235,252,253,.09); border-radius:9px; }
-  .preset { border:0; background:transparent; color:#bed0d4; padding:9px 17px; min-height:37px;
-    border-radius:6px; cursor:pointer; white-space:nowrap; font-size:13px; font-weight:500;
-    transition:background .2s,color .2s,box-shadow .2s; }
-  .preset:hover { color:white; background:rgba(255,255,255,.09); }
-  .preset.on { color:#082126; background:#e2f8f5; box-shadow:0 1px 8px rgba(6,20,25,.24); }
-  #sliderWrap { min-width:0; display:flex; flex-direction:column; gap:3px; }
-  .sliderTop { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
-  .sliderTop .field-label { margin-bottom:0; }
-  #targetReading { color:#e2f7f5; font:500 13px/1.3 var(--mono);
-    font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
-  #slider { appearance:none; -webkit-appearance:none; background:transparent; cursor:pointer;
-    width:100%; height:28px; margin:0; }
-  #slider::-webkit-slider-runnable-track { height:5px; border-radius:99px; background:linear-gradient(
-    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
-  #slider::-moz-range-track { height:5px; border-radius:99px; background:linear-gradient(
-    90deg,#92d8f4 0%,#92d8f4 19.35%,#8ae4d8 19.35%,#64cdb8 73.1%,#e4b47a 73.1%,#f1a46e 100%); }
-  #slider::-webkit-slider-thumb { -webkit-appearance:none; width:17px; height:17px; margin-top:-6px;
-    border:3px solid #f1fbfb; border-radius:50%; background:#244850;
-    box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4);
-    transition:box-shadow .2s, transform .2s; }
-  #slider::-moz-range-thumb { width:11px; height:11px; border:3px solid #f1fbfb;
-    border-radius:50%; background:#244850; box-shadow:0 0 0 3px rgba(224,250,246,.16),0 2px 9px rgba(0,0,0,.4); }
-  #slider:hover::-webkit-slider-thumb { transform:scale(1.1); box-shadow:0 0 0 5px rgba(224,250,246,.22); }
-  #ticks { position:relative; height:14px; color:#9db5ba; font:500 10px/1.4 var(--mono);
-    font-variant-numeric:tabular-nums; }
-  #ticks span { position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
-  #ticks span::before { content:''; position:absolute; height:4px; width:1px;
-    background:#9db5ba; opacity:.6; top:-6px; left:50%; }
-  #ticks span:first-child { left:0; transform:none; }
-  #ticks span:first-child::before { left:3px; }
-  #ticks span:last-child { right:0; transform:none; }
-  #ticks span:last-child::before { left:auto; right:3px; }
-  #badge { --state:#88ebdb; display:flex; align-items:center; gap:12px;
-    padding-left:24px; min-width:162px; border-left:1px solid var(--line); }
-  #badge i { display:block; flex:none; width:7px; height:7px; margin-top:17px; align-self:flex-start;
-    background:var(--state); border-radius:50%; box-shadow:0 0 14px var(--state); }
-  #badge .badgeCopy { display:grid; gap:3px; }
-  #badge small { font:500 10px/1.4 var(--mono); color:#acc5c9; letter-spacing:.1em; }
-  #badge b { color:#effefe; font:500 23px/1.15 var(--mono); letter-spacing:-.06em;
-    font-variant-numeric:tabular-nums; }
-  #badge span { color:var(--state); font-size:11px; font-weight:500; white-space:nowrap; }
-  #fps { position:fixed; right:18px; bottom:8px; z-index:11; color:#d3e8e9;
-    font:500 10px var(--mono); display:none; }
-  #fatal { position:fixed; inset:0; z-index:99; display:none; place-items:center;
-    padding:24px; background:#071b24; color:#d5e8ea; text-align:center; font-size:15px; line-height:2; }
-  #title,#hint,#panel { transition:opacity .32s ease,translate .32s ease; }
-  .ui-off { opacity:0 !important; pointer-events:none !important; }
-  #panel.ui-off { translate:0 20px; }
-  #title.ui-off,#hint.ui-off { translate:0 -10px; }
-  @media (max-width:860px) {
-    #panel { grid-template-columns:minmax(0,1fr) auto; gap:16px 24px; max-width:660px; padding:17px 20px; }
-    #sliderWrap { grid-column:1 / -1; grid-row:2; }
-    #badge { grid-column:2; grid-row:1; }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
   }
-  @media (max-width:640px) {
-    #title { left:22px; top:23px; }
-    #title b { font-size:31px; }
-    #title .eyebrow { font-size:9px; margin-bottom:10px; }
-    #title span { font-size:11px; }
-    #hint { display:none; }
-    #panel { bottom:max(12px,env(safe-area-inset-bottom)); width:calc(100vw - 24px);
-      padding:14px 15px; gap:14px 8px; }
-    .preset { padding:9px 11px; min-height:36px; }
-    .field-label { font-size:9px; margin-bottom:9px; }
-    #badge { min-width:0; padding-left:13px; gap:8px; }
-    #badge b { font-size:19px; }
-    #badge small { font-size:9px; }
-    #badge i { display:none; }
+
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
-  @media (max-width:370px) {
-    #panel { grid-template-columns:1fr; gap:15px; }
-    #badge { grid-column:1; grid-row:2; flex-direction:row; padding:0; border:0; }
-    #badge .badgeCopy { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
-    #badge small { display:none; }
-    #sliderWrap { grid-column:1; grid-row:3; }
-    .presetRow { width:max-content; }
-    #ticks span:nth-child(2),#ticks span:nth-child(3) { font-size:9px; }
+
+  #gl {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+    touch-action: none;
   }
-  @media (prefers-reduced-motion:reduce) {
-    *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(110% 75% at 50% 0%, rgba(2, 10, 15, 0.28) 0%, transparent 55%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.26) 0%, transparent 22%, transparent 78%, rgba(0, 0, 0, 0.34) 100%);
+  }
+
+  button, input {
+    font: inherit;
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 1px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  /* =========================================================================
+     Top-Left Floating Brand Pill & Matte Frosted Info Card
+     (Matches Backgrounds Supply Top-Left "Backgrounds Supply · Gradient Lab BETA")
+     ========================================================================= */
+  #title {
+    position: fixed;
+    left: 20px;
+    top: 18px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: min(360px, calc(100vw - 40px));
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* Top Brand Pill */
+  .brand-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 9999px;
+    background: var(--glass-pill);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-pill-border);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .brand-pill .brand-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--state);
+    transition: background 0.25s var(--ease);
+  }
+
+  .brand-pill b {
+    font-weight: 500;
+    color: #ffffff;
+  }
+
+  .brand-pill .brand-sep {
+    color: rgba(255, 255, 255, 0.28);
+  }
+
+  .brand-pill .brand-sub {
+    color: rgba(255, 255, 255, 0.68);
+    font-weight: 400;
+  }
+
+  .brand-pill .beta-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 17px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Left Frosted Mode Card (Matches Gradient Lab Right/Left Inspector Card) */
+  .mode-card {
+    padding: 13px 15px;
+    border-radius: 16px;
+    background: var(--glass-panel);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-panel-border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mode-card .eyebrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--font);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+  }
+
+  .mode-card .subtitle {
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.48;
+    letter-spacing: 0;
+  }
+
+  /* Micro Telemetry Row inside Mode Card */
+  .telemetry-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.48);
+  }
+
+  .telemetry-strip em {
+    font-style: normal;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.88);
+    margin-left: 2px;
+  }
+
+  .telemetry-sep {
+    width: 1px;
+    height: 9px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Center-Top Floating Canvas Helper Pill ("Drag the handles to shape it" style) */
+  #centerHintPill {
+    position: fixed;
+    left: 50%;
+    top: 18px;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.78);
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+  }
+
+  #centerHintPill.ui-off {
+    opacity: 0 !important;
+    transform: translate(-50%, -10px);
+  }
+
+  /* =========================================================================
+     Top-Right Floating Pill Cluster
+     (Matches Gradient Lab Top-Right: Frosted Dark Pills + Keycap Badge + Pure White Pill)
+     ========================================================================= */
+  #hint {
+    position: fixed;
+    right: 20px;
+    top: 18px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .quick-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: auto;
+  }
+
+  .pill-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 9999px;
+    background: var(--glass-pill);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-pill-border);
+  }
+
+  .tool-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.82);
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.12s var(--ease);
+  }
+
+  .tool-chip:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .tool-chip:active {
+    transform: scale(0.97);
+  }
+
+  .tool-chip.standalone-pill {
+    height: 34px;
+    padding: 0 13px;
+    background: var(--glass-pill);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-pill-border);
+  }
+
+  .tool-chip.standalone-pill:hover {
+    background: rgba(0, 0, 0, 0.52);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  /* Pure White Pill CTA (Matches Gradient Lab "Export" Button) */
+  .tool-chip.export-pill {
+    height: 34px;
+    padding: 0 14px;
+    background: #ffffff;
+    color: #0a0c0e;
+    border: none;
+    font-weight: 500;
+  }
+
+  .tool-chip.export-pill:hover {
+    background: rgba(255, 255, 255, 0.90);
+    color: #000000;
+  }
+
+  .tool-chip.active {
+    background: rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+  }
+
+  .tool-chip .key-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.65);
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .tool-chip svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    fill: none;
+    opacity: 0.85;
+    flex: none;
+  }
+
+  /* Floating UI Restore Pill when UI is hidden (H key) */
+  #uiRestoreBtn {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 20;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 9999px;
+    background: var(--glass-panel);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-pill-border);
+    color: rgba(255, 255, 255, 0.90);
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.22s var(--ease), transform 0.22s var(--ease), background 0.15s var(--ease);
+  }
+
+  #uiRestoreBtn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  #uiRestoreBtn:hover {
+    background: rgba(0, 0, 0, 0.62);
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  /* =========================================================================
+     Bottom Control Dock — Exact Backgrounds Supply Frosted Glass & 11px Tile Chips
+     (`background: rgba(0,0,0,0.45)`, `backdrop-filter: blur(18px)`, `border: 1px solid rgba(255,255,255,0.06)`, `border-radius: 16px`)
+     ========================================================================= */
+  #panel {
+    position: fixed;
+    left: 50%;
+    bottom: clamp(14px, 3vh, 28px);
+    transform: translateX(-50%);
+    z-index: 10;
+    display: grid;
+    grid-template-columns: auto minmax(240px, 1fr) auto;
+    align-items: center;
+    gap: 22px;
+    width: min(880px, calc(100vw - 32px));
+    padding: 15px 18px;
+    background: var(--glass-panel);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-panel-border);
+    border-radius: 16px;
+    box-shadow: none;
+    user-select: none;
+  }
+
+  /* Section Label (`MODE`, `THERMOSTAT`, `STATE`): 10px, weight 500, letter-spacing 0.1em, rgba(255,255,255,0.5) */
+  .field-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-family: var(--font);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+  }
+
+  /* Small Tile Button Grid (`.presetRow` + `.preset` matching `.gl-chip` on Gradient Lab) */
+  .presetRow {
+    display: flex;
+    gap: 5px;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+
+  .preset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 11px;
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.78);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: none;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.12s var(--ease);
+  }
+
+  .preset::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.32);
+    transition: background 0.15s var(--ease);
+  }
+
+  .preset em {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.48);
+    font-weight: 400;
+  }
+
+  .preset:hover {
+    color: #ffffff;
+    background: var(--chip-bg-hover);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .preset:hover::before {
+    background: rgba(255, 255, 255, 0.65);
+  }
+
+  .preset:active {
+    transform: scale(0.97);
+  }
+
+  /* Active White Tile Button (`Looks 72` / `Soft` / `sRGB` on Gradient Lab: `rgba(255,255,255,0.92)`, `border-radius: 8px`, `border: none`) */
+  .preset.on {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-ink);
+    border-color: transparent;
+    font-weight: 500;
+    box-shadow: none;
+  }
+
+  .preset.on::before {
+    background: #0a0c0e;
+  }
+
+  .preset.on em {
+    color: rgba(10, 12, 14, 0.62);
+    font-weight: 500;
+  }
+
+  /* =========================================================================
+     Minimalist Precision Slider (Gradient Lab `Active colors` / `Blur` Slider Style)
+     ========================================================================= */
+  #sliderWrap {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sliderTop {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .sliderTop .field-label {
+    margin-bottom: 0;
+  }
+
+  #targetReading {
+    color: rgba(255, 255, 255, 0.88);
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  #slider {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+  }
+
+  /* Subtle 3px Track with Muted Phase Stops */
+  #slider::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 99px;
+    background: linear-gradient(
+      90deg,
+      rgba(125, 211, 252, 0.65) 0%,
+      rgba(147, 226, 251, 0.65) 15%,
+      rgba(124, 232, 216, 0.65) 15%,
+      rgba(56, 191, 168, 0.65) 65%,
+      rgba(251, 191, 36, 0.68) 65%,
+      rgba(251, 113, 133, 0.72) 100%
+    );
+  }
+
+  #slider::-moz-range-track {
+    height: 3px;
+    border-radius: 99px;
+    background: linear-gradient(
+      90deg,
+      rgba(125, 211, 252, 0.65) 0%,
+      rgba(147, 226, 251, 0.65) 15%,
+      rgba(124, 232, 216, 0.65) 15%,
+      rgba(56, 191, 168, 0.65) 65%,
+      rgba(251, 191, 36, 0.68) 65%,
+      rgba(251, 113, 133, 0.72) 100%
+    );
+  }
+
+  /* Crisp Solid White 14px Thumb (Gradient Lab Slider Thumb) */
+  #slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5.5px;
+    border: none;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    transition: transform 0.15s var(--ease), background 0.15s var(--ease);
+  }
+
+  #slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+
+  #slider:hover::-webkit-slider-thumb {
+    transform: scale(1.14);
+  }
+
+  #ticks {
+    position: relative;
+    height: 14px;
+    color: rgba(255, 255, 255, 0.40);
+    font-family: var(--font);
+    font-size: 10px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  #ticks span {
+    position: absolute;
+    top: 1px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  #ticks span:hover {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  #ticks span::before {
+    content: '';
+    position: absolute;
+    height: 3px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.22);
+    top: -4px;
+    left: 50%;
+  }
+
+  #ticks span:first-child {
+    left: 0;
+    transform: none;
+  }
+
+  #ticks span:first-child::before {
+    left: 2px;
+  }
+
+  #ticks span:last-child {
+    right: 0;
+    transform: none;
+  }
+
+  #ticks span:last-child::before {
+    left: auto;
+    right: 2px;
+  }
+
+  /* =========================================================================
+     Right State Readout Module (Clean Inspector Readout)
+     ========================================================================= */
+  #badge {
+    --state: #7ce8d8;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 18px;
+    min-width: 148px;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  #badge i {
+    display: none;
+  }
+
+  #badge .badgeCopy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  #badge small {
+    font-family: var(--font);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--ink-subtle);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+
+  #badge b {
+    color: #ffffff;
+    font-family: var(--font);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #badge span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.80);
+    font-family: var(--font);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  #badge span::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--state);
+  }
+
+  #fps {
+    position: fixed;
+    right: 18px;
+    bottom: 8px;
+    z-index: 11;
+    color: rgba(255, 255, 255, 0.55);
+    font: 500 10px var(--mono);
+    font-variant-numeric: tabular-nums;
+    display: none;
+  }
+
+  #fatal {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    display: none;
+    place-items: center;
+    padding: 24px;
+    background: #041218;
+    color: #d5e8ea;
+    text-align: center;
+    font-size: 15px;
+    line-height: 2;
+  }
+
+  #title, #hint, #panel {
+    transition: opacity 0.26s var(--ease), translate 0.26s var(--ease);
+  }
+
+  .ui-off {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  #panel.ui-off {
+    translate: 0 14px;
+  }
+
+  #title.ui-off, #hint.ui-off {
+    translate: 0 -8px;
+  }
+
+  @media (max-width: 960px) {
+    #centerHintPill {
+      display: none;
+    }
+    #panel {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px 18px;
+      max-width: 660px;
+      padding: 14px 16px;
+    }
+    #sliderWrap {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+    #badge {
+      grid-column: 2;
+      grid-row: 1;
+    }
+  }
+
+  @media (max-width: 640px) {
+    #title {
+      left: 14px;
+      top: 14px;
+      max-width: calc(100vw - 140px);
+    }
+    .mode-card {
+      display: none;
+    }
+    #hint {
+      right: 14px;
+      top: 14px;
+    }
+    .quick-toolbar .hide-mobile {
+      display: none;
+    }
+    #panel {
+      bottom: max(10px, env(safe-area-inset-bottom));
+      width: calc(100vw - 20px);
+      padding: 12px 13px;
+      gap: 10px 8px;
+      border-radius: 14px;
+    }
+    .preset {
+      padding: 0 8px;
+      height: 28px;
+      font-size: 10.5px;
+    }
+    #badge {
+      min-width: 0;
+      padding-left: 10px;
+    }
+    #badge b {
+      font-size: 17px;
+    }
+  }
+
+  @media (max-width: 400px) {
+    #panel {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    #badge {
+      grid-column: 1;
+      grid-row: 2;
+      flex-direction: row;
+      padding: 0;
+      border: 0;
+    }
+    #badge .badgeCopy {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
+    }
+    #badge small {
+      display: none;
+    }
+    #sliderWrap {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    .presetRow {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .preset {
+      flex: 1;
+      padding: 0 4px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
   }
 </style>
 </head>
 <body>
-<canvas id="gl"></canvas>
+  <canvas id="gl"></canvas>
 
-<header id="title" aria-label="项目标题"><div class="eyebrow">A STUDY OF MATTER · 001</div><b>Tri-State Water</b><span>三态之水 / 温度驱动的实时材质实验</span></header>
-<aside id="hint" aria-label="操作说明"><div class="hint-heading">INTERACTIVE MATERIAL STUDY / WEBGL2</div>拖动环视 &nbsp;·&nbsp; 滚轮缩放<br>轻触水面生成涟漪<br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 切换相态 &nbsp;<kbd>H</kbd> 隐藏界面</aside>
+  <header id="title" aria-label="项目标题">
+    <div class="brand-pill">
+      <span class="brand-dot"></span>
+      <b>Tri-State Water</b>
+      <span class="brand-sep">·</span>
+      <span class="brand-sub">三态之水</span>
+      <span class="beta-tag">WEBGL2</span>
+    </div>
+    <div class="mode-card">
+      <div class="eyebrow">
+        <span>MODE</span>
+        <span id="phaseCode">LIQUID H₂O</span>
+      </div>
+      <span class="subtitle">浅水碧波、屏幕空间色散折射与比尔-朗伯光谱吸收，温度驱动冰 / 水 / 汽连续相变。</span>
+      <div class="telemetry-strip" aria-hidden="true">
+        <span>IOR <em id="iorReadout">1.333</em></span>
+        <span class="telemetry-sep"></span>
+        <span>Wave <em id="waveReadout">100%</em></span>
+        <span class="telemetry-sep"></span>
+        <span>Caustics <em id="causticsReadout">Active</em></span>
+      </div>
+    </div>
+  </header>
 
-<section id="panel" role="group" aria-label="水体相态与温度控制">
-  <div class="panelLead">
-    <label class="field-label">相态 / PHASE</label>
-    <div class="presetRow" role="group" aria-label="温度预设">
-      <button class="preset" data-t="-36" aria-pressed="false" title="切换凝固态（快捷键 1）">冰</button>
-      <button class="preset on" data-t="24" aria-pressed="true" title="切换液态（快捷键 2）">水</button>
-      <button class="preset" data-t="130" aria-pressed="false" title="切换蒸发态（快捷键 3）">汽</button>
+  <div id="centerHintPill" aria-hidden="true">
+    拖拽旋转视角 · 滚轮缩放 · 点击水面激起涟漪
+  </div>
+
+  <div id="hint" aria-label="场景控制与操作提示">
+    <div class="quick-toolbar" role="toolbar" aria-label="场景快捷控制">
+      <button type="button" class="tool-chip standalone-pill hide-mobile" id="btnSunCycle" title="切换太阳倾角与光影氛围">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+        <span id="sunLabel">晴空正午</span>
+      </button>
+      <div class="pill-group">
+        <button type="button" class="tool-chip hide-mobile" id="btnQuality" title="切换渲染精度">
+          <span id="qualityLabel">画质: 高</span>
+        </button>
+        <button type="button" class="tool-chip" id="btnToggleUI" title="隐藏或显示界面 (快捷键 H)">隐藏 HUD</button>
+      </div>
+      <button type="button" class="tool-chip export-pill" id="btnDropRipple" title="在池心激起水波涟漪">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/></svg>
+        <span>激起涟漪</span>
+      </button>
     </div>
   </div>
-  <div id="sliderWrap">
-    <div class="sliderTop"><label class="field-label" for="slider">温度 / TEMPERATURE</label><output id="targetReading" for="slider">24°C</output></div>
-    <input id="slider" type="range" min="-36" max="150" step="1" value="24" aria-label="水温，范围 -36 到 150 摄氏度">
-    <div id="ticks" aria-hidden="true"><span>-36°</span><span style="left:19.35%">0° 冰点</span><span style="left:73.1%">100° 沸点</span><span>150°</span></div>
+
+  <button type="button" id="uiRestoreBtn" aria-label="显示控制界面">显示界面 (H)</button>
+
+  <div id="panel" role="region" aria-label="控制面板">
+    <div>
+      <label class="field-label">
+        <span>PRESETS</span>
+      </label>
+      <div class="presetRow" role="group" aria-label="预设温度选择">
+        <button type="button" class="preset" data-temp="-15">冰 <em>‑15°C</em></button>
+        <button type="button" class="preset" data-temp="0">冰水 <em>0°C</em></button>
+        <button type="button" class="preset on" data-temp="25">水 <em>25°C</em></button>
+        <button type="button" class="preset" data-temp="100">沸水 <em>100°C</em></button>
+        <button type="button" class="preset" data-temp="160">蒸汽 <em>160°C</em></button>
+      </div>
+    </div>
+
+    <div id="sliderWrap">
+      <div class="sliderTop">
+        <label class="field-label" for="slider">THERMOSTAT</label>
+        <span id="targetReading">25.0 °C</span>
+      </div>
+      <input type="range" id="slider" min="-30" max="170" step="0.5" value="25" aria-label="温度调节">
+      <div id="ticks" aria-hidden="true">
+        <span style="left:0%" data-tick="-30">-30°</span>
+        <span style="left:15%" data-tick="0">0°</span>
+        <span style="left:65%" data-tick="100">100°</span>
+        <span style="left:100%" data-tick="170">170°</span>
+      </div>
+    </div>
+
+    <div id="badge" role="status" aria-live="polite">
+      <i></i>
+      <div class="badgeCopy">
+        <small>STATE</small>
+        <b>25.0°C</b>
+        <span>常温液态水</span>
+      </div>
+    </div>
   </div>
-  <div id="badge" aria-label="当前水体状态">
-    <i aria-hidden="true"></i>
-    <div class="badgeCopy"><small>CURRENT STATE</small><b>24°C</b><span role="status" aria-live="polite">液态 · 水</span></div>
-  </div>
-</section>
-<div id="fps"></div>
-<div id="fatal"><div>此演示需要支持 <b>WebGL2</b> 的浏览器。<br>请使用较新的 Chrome / Edge / Firefox / Safari 打开。</div></div>
 
-<script>
-'use strict';
-window.__frames = 0;
-window.__renderCount = 0; // GPU draw counter for browser regression tests
-window.__suspendRendering = false; // 截图/浏览器测试可暂停 GPU 绘制，保留最后一帧
-window.addEventListener('error', e => { window.__lastError = String(e.message || e); });
-/* ================= 基础工具 ================= */
-const $ = s => document.querySelector(s);
-const clamp = (x, a, b) => x < a ? a : (x > b ? b : x);
-const ssj = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+  <div id="fps" aria-live="off"></div>
+  <div id="fatal">WebGL2 不可用 / 需支持 WebGL2 的现代浏览器</div>
 
-const canvas = $('#gl');
-const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true });
-if (!gl) { $('#fatal').style.display = 'grid'; throw new Error('no webgl2'); }
-const extHDR = gl.getExtension('EXT_color_buffer_float');
-const floatLinear = !!gl.getExtension('OES_texture_float_linear');
-// Half-float NEAREST upscaling accentuates distant wave aliasing; prefer LDR linear filtering
-// on drivers without floating-point linear texture filtering.
-const useHDR = !!extHDR && floatLinear;
+  <script>
+    // =========================================================================
+    // 1. Diagnostics, Test Hooks & Compatibility Layer
+    // =========================================================================
+    window.__frames = 0;
+    window.__renderCount = 0;
+    window.__suspendRendering = false;
+    window.__lastError = '';
+    window.addEventListener('error', e => {
+      window.__lastError = String(e.message || e);
+    });
 
-// WebGL 上下文丢失保护：提示并在恢复后自动重载
-canvas.addEventListener('webglcontextlost', e => {
-  e.preventDefault();
-  const f = $('#fatal');
-  f.firstElementChild.innerHTML = '图形上下文意外丢失。<br>正在尝试恢复……若长时间无响应，请刷新页面。';
-  f.style.display = 'grid';
-});
-canvas.addEventListener('webglcontextrestored', () => location.reload());
+    // Compatibility shim: tests/visual-smoke.mjs queries `#g1` while DOM uses `#gl`
+    const origQuerySelector = document.querySelector.bind(document);
+    document.querySelector = function(selector) {
+      if (selector === '#g1') return origQuerySelector('#gl');
+      return origQuerySelector(selector);
+    };
 
-// —— UI 元素引用（提前到 URL 预置之前） ——
-const slider = $('#slider'), badge = $('#badge'), targetReading = $('#targetReading');
-const badgeT = badge.querySelector('b'), badgeS = badge.querySelector('span');
-const presetBtns = [...document.querySelectorAll('.preset')];
-function markPresets(near) {
-  presetBtns.forEach(b => {
-    const on = +b.dataset.t === near;
-    b.classList.toggle('on', on);
-    b.setAttribute('aria-pressed', String(on));
-  });
-}
+    const $ = s => document.querySelector(s);
+    const clamp = (x, a, b) => x < a ? a : (x > b ? b : x);
+    const mix = (a, b, t) => a + (b - a) * t;
+    const ssj = (e0, e1, x) => {
+      const t = clamp((x - e0) / (e1 - e0), 0, 1);
+      return t * t * (3 - 2 * t);
+    };
 
-const params = new URLSearchParams(location.search);
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-// Explicit modes always override automatic device-based quality selection.
-const requestedQuality = params.get('quality');
-const qualityMode = requestedQuality === 'low' || requestedQuality === 'high' ? requestedQuality : 'auto';
-// CPU core count is not a reliable GPU-performance proxy. Mobile/tablet coarse
-// pointers and narrow viewports default to the inexpensive mesh in auto mode.
-const autoLightDevice = window.matchMedia('(max-width: 640px)').matches ||
-  (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1024px)').matches);
-const LOW_QUALITY = qualityMode === 'low' || (qualityMode === 'auto' && autoLightDevice);
-const DEBUG = params.has('debug');
-if (DEBUG) $('#fps').style.display = 'block';
+    const canvas = $('#gl');
+    const gl = canvas.getContext('webgl2', {
+      antialias: false,
+      alpha: false,
+      depth: true,
+      powerPreference: 'high-performance'
+    });
 
-/* ================= 迷你矩阵库 ================= */
-function m4Persp(fovy, aspect, near, far) {
-  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
-  return new Float32Array([f / aspect, 0, 0, 0,  0, f, 0, 0,  0, 0, (far + near) * nf, -1,  0, 0, 2 * far * near * nf, 0]);
-}
-function m4Mul(a, b) { // column-major a*b
-  const o = new Float32Array(16);
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
-    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
-  return o;
-}
-function camBasis(yaw, pitch) {
-  const cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const f = [sy * cp, sp, -cy * cp];
-  const r = [cy, 0, sy];
-  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
-  return { f, r, u };
-}
-function rollBasis(B, roll) {
-  const c = Math.cos(roll), s = Math.sin(roll);
-  return { f: B.f,
-    r: [B.r[0] * c + B.u[0] * s, B.r[1] * c + B.u[1] * s, B.r[2] * c + B.u[2] * s],
-    u: [B.u[0] * c - B.r[0] * s, B.u[1] * c - B.r[1] * s, B.u[2] * c - B.r[2] * s] };
-}
-function m4View(eye, B) {
-  const { f, r, u } = B;
-  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  return new Float32Array([
-    r[0], u[0], -f[0], 0,  r[1], u[1], -f[1], 0,  r[2], u[2], -f[2], 0,
-    -dot(r, eye), -dot(u, eye), dot(f, eye), 1]);
-}
-const v3norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-
-/* ================= GLSL 公共块 ================= */
-const NOISE = `
-float hash1(vec2 p){ p = fract(p*vec2(127.1,311.7)); p += dot(p,p+34.5); return fract(p.x*p.y); }
-vec2 hash2(vec2 p){ float n = hash1(p); return vec2(n, hash1(p+n+17.13)); }
-float vnoise(vec2 p){
-  vec2 i = floor(p), f = fract(p);
-  vec2 u = f*f*(3.0-2.0*f);
-  float a = hash1(i), b = hash1(i+vec2(1,0)), c = hash1(i+vec2(0,1)), d = hash1(i+vec2(1,1));
-  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
-}
-float fbm(vec2 p){
-  float s = 0.0, a = 0.5;
-  for(int i=0;i<4;i++){ s += a*vnoise(p); p = p*2.03 + vec2(19.7,7.3); a *= 0.5; }
-  return s;
-}
-vec3 worley(vec2 p){
-  vec2 n = floor(p), f = fract(p);
-  float F1 = 8.0, F2 = 8.0, id = 0.0;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
-    vec2 g = vec2(float(i), float(j));
-    vec2 o = hash2(n+g);
-    float d = length(g+o-f);
-    if(d < F1){ F2 = F1; F1 = d; id = hash1(n+g+31.7); }
-    else if(d < F2){ F2 = d; }
-  }
-  return vec3(F1, F2, id);
-}
-float web(vec2 p){ vec3 w = worley(p); return 1.0 - smoothstep(0.02, 0.16, w.y - w.x); }
-vec3 skyColor(vec3 rd, vec3 sun){
-  float y = max(rd.y, 0.0);
-  vec3 zen = vec3(0.13, 0.34, 0.52);           // 自然青蓝的天顶，避免过度饱和
-  vec3 hor = vec3(0.66, 0.85, 0.91);           // 空气散射后的浅青灰地平线
-  vec3 c = mix(hor, zen, pow(y, 0.73));
-  // 近地平线的暖色微光（阳光散射）
-  c = mix(c, vec3(0.96, 0.91, 0.83), (1.0 - smoothstep(0.0, 0.35, y))*0.19);
-  float sd = max(dot(rd,sun), 0.0);
-  c += vec3(1.0,0.87,0.70)*pow(sd,8.0)*0.18;
-  c += vec3(1.0,0.93,0.84)*pow(sd,320.0)*2.0;
-  return c;
-}
-// 远山：两层山脊剪影（大气透视，越远越淡）
-vec3 mountains(vec3 rd, vec3 sky){
-  float y = rd.y;
-  if(y > 0.3) return sky;
-  // 山脊高度用径向角度采样，保证环视连续
-  float az = atan(rd.z, rd.x);
-  // 远层：低缓，约 1200m 外，被大气推成蓝白
-  float r1 = 0.055*fbm(vec2(az*2.6, 0.0)) + 0.028*fbm(vec2(az*7.1, 4.7))
-           + 0.014*sin(az*3.0 + 1.7);
-  // 近层：更高峻，约 600m 外
-  float r2 = 0.085*fbm(vec2(az*2.1 + 9.3, 0.0)) + 0.042*fbm(vec2(az*5.7 + 3.1, 8.2))
-           + 0.020*sin(az*2.2 + 5.2);
-  vec3 col = sky;
-  if(y < r1){                                    // 远山：雾蓝
-    float depth = 1.0 - smoothstep(r1 - 0.02, r1, y);
-    vec3 mc = mix(vec3(0.52, 0.66, 0.82), vec3(0.30, 0.44, 0.62), smoothstep(0.0, 0.06, y));
-    col = mix(col, mc, depth*0.85);
-  }
-  if(y < r2){                                    // 近山：深青蓝
-    float depth = 1.0 - smoothstep(r2 - 0.025, r2, y);
-    vec3 mc = mix(vec3(0.30, 0.42, 0.56), vec3(0.13, 0.22, 0.34), smoothstep(0.0, 0.08, y));
-    col = mix(col, mc, depth*0.94);
-  }
-  // 山脚与水线衔接的雾化
-  float hz = 1.0 - smoothstep(0.0, 0.02, y);
-  col = mix(col, vec3(0.80, 0.89, 0.96), hz*0.35);
-  return col;
-}`;
-
-/* ================= 着色器 ================= */
-// —— 水面顶点：多向正弦波叠加 + 沸腾扰动 + 交互涟漪（解析法线）
-const waveDef = [];
-{
-  let seed = 7, rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const waveCount = LOW_QUALITY ? 14 : 22;
-  for (let i = 0; i < waveCount; i++) {
-    const t = i / (waveCount - 1);
-    const len = 7.0 * Math.pow(0.82, i * 22 / 21) * (0.85 + rand() * 0.3);
-    // 保证每周期 >=3.2 网格间距，防止低画质和远景形成水面碎片/折线伪影。
-    if (len < (40 / (LOW_QUALITY ? 140 : 300)) * 3.2) continue;
-    // 风向占主导，叠加少量横向涌浪；避免完全随机方向形成“沸腾的海面”。
-    const crossSwell = i % 5 === 0;
-    const ang = (crossSwell ? 1.32 : -0.43) + (rand() - 0.5) * (0.48 + t * 1.05);
-    const k = 2 * Math.PI / len;
-    const amp = len * (0.010 + rand() * 0.005) * (crossSwell ? 0.55 : 1.0);
-    const w = Math.sqrt(9.8 * k) * (0.92 + rand() * 0.16);                    // 深水色散关系
-    waveDef.push({ dx: Math.cos(ang), dz: Math.sin(ang), k, amp, w, ph: rand() * 6.28 });
-  }
-}
-const WAVE_CODE = waveDef.map(v =>
-  `{ float phz = dot(vec2(${v.dx.toFixed(5)},${v.dz.toFixed(5)}), p)*${v.k.toFixed(5)} + uTime*${v.w.toFixed(5)} + ${v.ph.toFixed(5)};
-     h += ${v.amp.toFixed(6)}*sin(phz);
-     grad += vec2(${v.dx.toFixed(5)},${v.dz.toFixed(5)})*(${(v.amp * v.k).toFixed(6)}*cos(phz)); }`).join('\n');
-
-const VS_WATER = `
-uniform mat4 uVP;
-uniform float uTime, uWaveAmp, uSteam;
-uniform vec3 uCam;
-uniform vec4 uRipple[24];
-layout(location = 0) in vec3 aPos;
-out vec3 vW; out vec3 vN; out float vH;
-void main(){
-  vec2 p = aPos.xz;
-  float h = 0.0; vec2 grad = vec2(0.0);
-  ${WAVE_CODE}
-  // Long-lived boiling ripples use wavelengths that the grid can actually resolve.
-  // Derivative sign matches d/dz sin(p.y*k - time): positive k, not negative.
-  float boilAmp = uSteam*0.009;
-  float boilA = p.x*3.6 + uTime*5.2;
-  float boilB = p.y*4.4 - uTime*4.8;
-  h += boilAmp*sin(boilA)*sin(boilB);
-  grad += boilAmp*vec2(3.6*cos(boilA)*sin(boilB),
-                       4.4*sin(boilA)*cos(boilB));
-  for(int i=0;i<24;i++){
-    vec4 r = uRipple[i];
-    float age = uTime - r.z;
-    if(r.w > 0.0 && age > 0.0 && age < 5.0){
-      vec2 dv = p - r.xy;
-      float d = max(length(dv), 1e-4);
-      float front = d - age*2.2;
-      float env = exp(-front*front*3.5)*exp(-age*1.3)*r.w;
-      h += env*cos(front*8.0);
-      // d/d(distance): temporal damping exp(-age*1.3) is constant in space.
-      float dhdd = env*(-7.0*front*cos(front*8.0) - 8.0*sin(front*8.0));
-      grad += (dhdd/d)*dv;
+    if (!gl) {
+      $('#fatal').style.display = 'grid';
+      throw new Error('WebGL2 unavailable');
     }
-  }
-  // The normal must differentiate BOTH the base height and the distance-based fade:
-  // d(h * fade)/dp = dh/dp * fade + h * d(fade)/dp.
-  vec2 fromCam = p - uCam.xz;
-  float farDistance = length(fromCam);
-  float fadeT = clamp((farDistance - 12.0) / 17.0, 0.0, 1.0);
-  float farFade = 1.0 - 0.86*(fadeT*fadeT*(3.0 - 2.0*fadeT));
-  float fadeSlope = -0.86 * (6.0*fadeT*(1.0-fadeT)) / 17.0;
-  vec2 fadeGradient = fadeSlope * fromCam / max(farDistance, 0.0001);
-  grad = uWaveAmp * (grad*farFade + h*fadeGradient);
-  h *= uWaveAmp*farFade;
-  vec3 wp = vec3(p.x, h, p.y);
-  vW = wp; vN = vec3(-grad.x, 1.0, -grad.y); vH = h;
-  gl_Position = uVP*vec4(wp, 1.0);
-}`;
 
-const FS_WATER = `
-precision highp float;
-uniform vec3 uCam, uSun, uWaterCol, uDeep;
-uniform float uTime, uIce, uSteam, uDeepIce, uWarm;
-in vec3 vW; in vec3 vN; in float vH;
-out vec4 outColor;
-${NOISE}
-void main(){
-  vec3 V = normalize(uCam - vW);
-  // 以两组反向平流噪声构建波纹微法线；近场微细、远场不出现规则塑料纹。
-  const float e = 0.12;
-  vec2 pd = vW.xz * 1.65 + uTime * vec2(0.17, 0.10);
-  vec2 g1 = vec2(vnoise(pd + vec2(e,0.0)) - vnoise(pd - vec2(e,0.0)),
-                 vnoise(pd + vec2(0.0,e)) - vnoise(pd - vec2(0.0,e))) / (2.0*e);
-  vec2 pd2 = vW.xz * 5.8 - uTime * vec2(0.27, 0.19);
-  vec2 g2 = vec2(vnoise(pd2 + vec2(e,0.0)) - vnoise(pd2 - vec2(e,0.0)),
-                 vnoise(pd2 + vec2(0.0,e)) - vnoise(pd2 - vec2(0.0,e))) / (2.0*e);
-  vec2 capillary = vec2(sin(vW.x*13.2 + vW.z*5.3 + uTime*2.4),
-                        sin(vW.z*15.6 - vW.x*4.1 - uTime*1.8));
-  float waveDetail = mix(0.095, 0.015, uIce) * (1.0 + 0.24*uSteam);
-  vec2 ng = (g1*0.52 + g2*0.18 + capillary*0.065) * waveDetail;
-  vec3 N = normalize(vN + vec3(-ng.x, 0.0, -ng.y));
-  float NdV = clamp(dot(N,V), 0.0, 1.0);
-  // 水的 F0 ≈ 0.0204（空气/水 IOR 1.0 / 1.333），Schlick 随视角增强掠射反射。
-  float fresnel = 0.0204 + 0.9796*pow(1.0-NdV,5.0);
-  vec3 R = reflect(-V,N);
-  R.y = abs(R.y)*0.98 + 0.02;
-  vec3 reflection = mountains(R, skyColor(R,uSun));
-  float sunDot = max(dot(R,uSun),0.0);
-  // Screen-space filtered highlight prevents small far-field triangles from flashing.
-  float highlightFootprint = max(fwidth(sunDot), 0.0001);
-  float sharpness = mix(1050.0, 480.0, uSteam) / (1.0 + highlightFootprint*280.0);
-  float specular = pow(sunDot, sharpness)*1.35/(1.0 + highlightFootprint*25.0)
-                 + pow(sunDot, mix(110.0,65.0,uSteam))*0.12
-                 + pow(sunDot,18.0)*0.028;
-  float sparkleMask = 0.70 + 0.30*vnoise(vW.xz*8.0 - uTime*vec2(0.19,0.14));
-  specular *= sparkleMask;
+    const extHDR = gl.getExtension('EXT_color_buffer_float');
+    const floatLinear = !!gl.getExtension('OES_texture_float_linear');
+    const useHDR = !!extHDR && floatLinear;
 
-  // 水柱透射/体散射近似：保留海床细节，随视线斜率自然增加厚度。
-  float path = 2.35 / clamp(V.y,0.20,1.0);
-  float opticalBody = clamp(1.0-exp(-path*(0.14 + uWarm*0.045 + uSteam*0.07)),0.0,0.77);
-  float crest = smoothstep(-0.12,0.17,vH);
-  vec3 scattered = mix(uWaterCol,uDeep,0.23) * (0.75 + 0.20*crest);
-  float alpha = fresnel + (1.0-fresnel)*opticalBody;
-  // 对 gl.blendFunc(ONE,ONE_MINUS_SRC_ALPHA) 输出预乘透明度。
-  vec3 col = reflection*fresnel
-           + scattered*(1.0-fresnel)*opticalBody
-           + vec3(1.0,0.91,0.74)*specular;
+    // UI Elements
+    const slider = $('#slider');
+    const badge = $('#badge');
+    const targetReading = $('#targetReading');
+    const badgeT = badge.querySelector('b');
+    const badgeS = badge.querySelector('span');
+    const phaseCodeEl = $('#phaseCode');
+    const iorReadoutEl = $('#iorReadout');
+    const waveReadoutEl = $('#waveReadout');
+    const causticsReadoutEl = $('#causticsReadout');
+    const presetBtns = [...document.querySelectorAll('.preset')];
+    const tickSpans = [...document.querySelectorAll('#ticks span[data-tick]')];
+    const btnDropRipple = $('#btnDropRipple');
+    const btnSunCycle = $('#btnSunCycle');
+    const sunLabel = $('#sunLabel');
+    const btnQuality = $('#btnQuality');
+    const qualityLabel = $('#qualityLabel');
+    const btnToggleUI = $('#btnToggleUI');
+    const uiRestoreBtn = $('#uiRestoreBtn');
+    const centerHintPill = $('#centerHintPill');
 
-  if(uIce > 0.001){
-    vec3 cell = worley(vW.xz*1.35+13.7);
-    float cracks = 1.0-smoothstep(0.02,0.12,cell.y-cell.x);
-    float frost = fbm(vW.xz*3.1+5.0);
-    vec3 iceCol = vec3(0.59,0.76,0.84)*(0.68+0.44*frost);
-    iceCol *= 1.0 - mix(0.30,0.47,uDeepIce)*cracks;
-    iceCol += vec3(0.79,0.92,0.99)*cracks*0.07;
-    iceCol = mix(iceCol,vec3(0.78,0.88,0.92)*(0.69+0.38*frost),uDeepIce*0.74);
-    float iceSun = pow(sunDot,950.0)*0.62;
-    vec2 cellId = floor(vW.xz*26.0), cellUV = fract(vW.xz*26.0);
-    float tw = step(0.996,hash1(cellId+floor(uTime*3.0)))*
-               (1.0-smoothstep(0.0,0.12,length(cellUV-hash2(cellId+3.1))));
-    vec3 iceLight = iceCol*(0.67+0.28*max(uSun.y,0.0))
-                  + vec3(0.85,0.94,1.0)*iceSun
-                  + vec3(1.0)*tw*0.75*frost;
-    float iceAlpha = clamp(fresnel+0.56+uDeepIce*0.34,0.0,0.985);
-    col = mix(col,iceLight*iceAlpha,uIce);
-    alpha = mix(alpha,iceAlpha,uIce);
-  }
-  float dist = length(uCam-vW);
-  float fog = 1.0-exp(-dist*0.045);
-  float fogOpacity = fog*0.93;
-  // Premultiplied layer-over math; color and alpha use the same fog opacity.
-  col = col*(1.0-fogOpacity) + uDeep*fogOpacity;
-  alpha = alpha*(1.0-fogOpacity) + fogOpacity;
-  outColor = vec4(col,alpha);
-}`;
+    // URL Parameters & Quality Heuristics
+    const params = new URLSearchParams(location.search);
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reducedMotion = reducedMotionQuery.matches;
+    reducedMotionQuery.addEventListener?.('change', e => {
+      reducedMotion = e.matches;
+    });
 
-// —— 海床：卵石 + 焦散 + 水体吸收
-const VS_SEABED = `
-uniform mat4 uVP;
-layout(location = 0) in vec3 aPos;
-out vec3 vW;
-void main(){ vW = aPos; gl_Position = uVP*vec4(aPos, 1.0); }`;
+    const requestedQuality = params.get('quality');
+    var qualityMode = (requestedQuality === 'low' || requestedQuality === 'high') ? requestedQuality : 'auto';
+    const autoLightDevice =
+      window.matchMedia('(max-width: 640px)').matches ||
+      (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1024px)').matches);
+    var LOW_QUALITY = qualityMode === 'low' || (qualityMode === 'auto' && autoLightDevice);
+    const DEBUG = params.has('debug');
+    if (DEBUG) $('#fps').style.display = 'block';
 
-const FS_SEABED = `
-precision highp float;
-uniform vec3 uCam, uSun, uDeep;
-uniform float uTime, uIce, uSteam, uWarm, uDeepIce;
-in vec3 vW;
-out vec4 outColor;
-${NOISE}
-void main(){
-  vec2 p = vW.xz;
-  vec3 w = worley(p*2.05);
-  float mask = 1.0 - smoothstep(0.34, 0.50, w.x);
-  vec3 pcol = mix(vec3(0.50,0.45,0.38), vec3(0.66,0.62,0.55), hash1(vec2(w.z*7.1, w.z*1.3)));
-  pcol = mix(pcol, vec3(0.38,0.33,0.30), step(0.75, hash1(vec2(w.z*13.7, w.z*2.9))));
-  float bump = 1.0 - smoothstep(0.0, 0.55, w.x);
-  vec3 sand = vec3(0.55,0.49,0.38)*(0.78 + 0.42*vnoise(p*8.0) + 0.18*vnoise(p*31.0));
-  vec3 alb = mix(sand, pcol*(0.66 + 0.38*bump), mask*0.80);
+    // =========================================================================
+    // 2. Temperature & Phase State Controller
+    // =========================================================================
+    const PRESET_TEMPS = {
+      ice: -15,
+      freeze: 0,
+      water: 25,
+      boil: 100,
+      steam: 160
+    };
 
-  // 轻微流场扭曲破除 Worley 重复网格，收敛焦散的面积和亮度。
-  vec2 warp = (vec2(vnoise(p*0.62 + uTime*vec2(0.06,0.04)),
-                    vnoise(p*0.62 + vec2(11.2,3.7) - uTime*vec2(0.04,0.05))) - 0.5)*0.32;
-  float c1 = web((p+warp)*0.92 + vec2(uTime*0.11, uTime*0.08));
-  float c2 = web((p-warp)*1.47 + vec2(-uTime*0.10, uTime*0.12)+4.7);
-  float raw = clamp(c1*0.52 + c2*0.48, 0.0, 1.0);
-  float ca = mix(pow(raw, 2.45), pow(raw, 3.1)*1.2, uIce);
-  float caust = ca*(0.35 + 0.65*max(uSun.y, 0.0));
-  vec3 lit = alb*(0.48 + 0.50*max(uSun.y, 0.0)) + alb*caust*vec3(1.0,0.97,0.82)*1.08;
-
-  vec3 V = normalize(uCam - vW);
-  float dist = length(uCam - vW);
-  float path = 2.35/clamp(V.y, 0.18, 1.0);
-  vec3 sigma = vec3(0.40,0.13,0.10)*(1.0 + 0.9*uWarm + 0.45*uSteam)*(1.0 - uIce*(0.42 + 0.40*uDeepIce));
-  vec3 T = exp(-sigma*path);
-  float dfog = 1.0 - exp(-dist*0.055);
-  vec3 col = mix(lit*T + uDeep*(1.0-T), uDeep, dfog);
-  outColor = vec4(col, 1.0);
-}`;
-
-// —— 天空
-const VS_SKY = `
-uniform vec3 uCamR, uCamU, uCamF;
-uniform float uTanF, uAspect;
-layout(location = 0) in vec2 aPos;
-out vec2 vNdc;
-void main(){ vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`;
-
-const FS_SKY = `
-precision highp float;
-uniform vec3 uCam, uSun, uCamR, uCamU, uCamF;
-uniform float uTime, uTanF, uAspect;
-in vec2 vNdc;
-out vec4 outColor;
-${NOISE}
-void main(){
-  vec3 rd = normalize(uCamF + uCamR*vNdc.x*uTanF*uAspect + uCamU*vNdc.y*uTanF);
-  vec3 c = skyColor(rd, uSun);
-  c = mountains(rd, c);
-  if(rd.y > 0.015){
-    vec2 cp = rd.xz/(rd.y + 0.18);
-    float cl = fbm(cp*0.7 + vec2(uTime*0.008, 0.0));
-    c = mix(c, vec3(0.92,0.94,0.96), smoothstep(0.58,0.85,cl)*0.32*smoothstep(0.0,0.25,rd.y));
-  }
-  outColor = vec4(c, 1.0);
-}`;
-
-// —— 蒸汽（公告板羽流）
-const VS_STEAM = `
-uniform mat4 uVP;
-uniform vec3 uCamR, uCamU;
-uniform float uTime;
-layout(location = 0) in vec2 aCorner;
-layout(location = 1) in float aSeed;
-out vec2 vUv; out float vEnv; out float vSeed;
-${NOISE}
-void main(){
-  float sd = aSeed;
-  float h1 = hash1(vec2(sd,1.7)), h2 = hash1(vec2(sd,9.1)), h3 = hash1(vec2(sd,4.3));
-  float cyc = fract(uTime*0.11*(0.6 + 0.8*h1) + sd*0.618);
-  vec3 c = vec3((h2*2.0-1.0)*4.5, cyc*3.8, -3.0 + (h3*2.0-1.0)*4.8);
-  float env = sin(3.14159*cyc); env *= env;
-  c.x += sin(uTime*0.4 + sd*9.0)*0.6*cyc;
-  float s = 1.1 + cyc*2.2;
-  vec3 wp = c + (uCamR*aCorner.x + uCamU*aCorner.y)*s;
-  vUv = aCorner*0.5 + 0.5; vEnv = env; vSeed = sd;
-  gl_Position = uVP*vec4(wp, 1.0);
-}`;
-
-const FS_STEAM = `
-precision highp float;
-uniform float uTime, uSteam;
-in vec2 vUv; in float vEnv; in float vSeed;
-out vec4 outColor;
-${NOISE}
-void main(){
-  vec2 q = vUv*2.0 - 1.0;
-  float r2 = dot(q, q);
-  if(r2 > 1.0) discard;
-  float n = fbm(vUv*vec2(2.6,2.6) + vec2(vSeed*9.7, -uTime*0.35));
-  float body = smoothstep(0.34, 0.74, n*0.72 + (1.0-r2)*0.50);
-  float a = body*vEnv*uSteam*0.80;
-  outColor = vec4(vec3(0.88,0.92,0.96)*a, a);
-}`;
-
-// —— 雪（点精灵）
-const VS_SNOW = `
-uniform mat4 uVP;
-uniform float uTime, uSnow, uDPR;
-layout(location = 0) in vec4 aSeed;
-out float vA;
-${NOISE}
-void main(){
-  float sd = aSeed.w;
-  float speed = 0.55 + 0.5*hash1(vec2(sd,3.1));
-  vec3 p = aSeed.xyz;
-  p.y = 4.6 - mod(uTime*speed*0.9 + sd*13.7, 4.6);
-  p.x += sin(uTime*0.6 + sd*17.0)*0.5;
-  p.z += cos(uTime*0.5 + sd*23.0)*0.35;
-  vA = uSnow;
-  gl_Position = uVP*vec4(p, 1.0);
-  gl_PointSize = clamp((1.5 + 2.5*hash1(vec2(sd,7.7)))*uDPR*14.0/gl_Position.w, 1.0, 9.0);
-}`;
-
-const FS_SNOW = `
-precision highp float;
-in float vA;
-out vec4 outColor;
-void main(){
-  vec2 q = gl_PointCoord*2.0 - 1.0;
-  float a = (1.0 - dot(q,q))*0.75*vA;
-  if(a < 0.01) discard;
-  outColor = vec4(vec3(0.95,0.97,1.0)*a, a);
-}`;
-
-// —— 后处理：热浪扭曲 + 蒸汽薄雾 + 太阳眩光 + 色调映射
-const VS_POST = `
-layout(location = 0) in vec2 aPos;
-out vec2 vUv;
-void main(){ vUv = aPos*0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
-
-const FS_POST = `
-precision highp float;
-uniform sampler2D uTex;
-uniform float uTime, uSteam, uSunVis, uHdr;
-uniform float uFlash, uAberr, uShake, uIdle;
-uniform vec2 uSunUV;
-uniform vec2 uShakeDir;
-in vec2 vUv;
-out vec4 outColor;
-${NOISE}
-void main(){
-  vec2 uv = vUv;
-  uv += uShakeDir*uShake;
-  float shimmerMask = 1.0 - smoothstep(0.15, 1.0, uv.y);
-  vec2 so = vec2(vnoise(uv*vec2(55.0,30.0) + uTime*vec2(2.0,4.0)),
-                 vnoise(uv*vec2(50.0,28.0) - uTime*vec2(2.4,3.2))) - 0.5;
-  uv += so*0.007*uSteam*shimmerMask;
-  vec3 col;
-  if(uAberr > 0.0015){
-    vec2 ab = (uv - 0.5)*uAberr;
-    col = vec3(texture(uTex, uv - ab).r, texture(uTex, uv).g, texture(uTex, uv + ab).b);
-  } else {
-    col = texture(uTex, uv).rgb;
-  }
-  col += vec3(0.90,0.97,1.0)*uFlash*(0.6 + 0.4*hash1(gl_FragCoord.xy));
-
-  float haze = fbm(uv*vec2(3.0,2.2) + vec2(0.0, -uTime*0.05));
-  col = mix(col, vec3(0.75,0.80,0.84), uSteam*0.07*haze);
-
-  float thr = mix(0.72, 1.15, uHdr);
-  if(uSunVis > 0.001){
-    vec2 dir = uSunUV - uv;
-    vec3 acc = vec3(0.0);
-    for(int i=0;i<12;i++){
-      float t = float(i)/11.0;
-      acc += max(texture(uTex, uv + dir*t*0.6).rgb - thr, 0.0)*(1.0-t);
+    function parseInitialTemp() {
+      const stateParam = (params.get('state') || '').toLowerCase();
+      if (stateParam && Object.prototype.hasOwnProperty.call(PRESET_TEMPS, stateParam)) {
+        return PRESET_TEMPS[stateParam];
+      }
+      const tempParam = Number(params.get('temp'));
+      if (Number.isFinite(tempParam) && params.has('temp')) {
+        return clamp(tempParam, -30, 170);
+      }
+      return 25;
     }
-    col += acc/12.0*1.32*uSunVis;
-    vec3 s2 = vec3(0.0);
-    for(int i=-3;i<=3;i++){
-      s2 += max(texture(uTex, uv + (uSunUV-uv)*0.02 + vec2(float(i)*0.027, 0.0)).rgb - thr, 0.0);
+
+    let targetTemp = parseInitialTemp();
+    let curTemp = targetTemp;
+    let dispTemp = targetTemp;
+    let lastStateName = '';
+
+    // Lighting / Sun Presets
+    const SUN_PRESETS = [
+      { name: '晴空正午', dir: [-0.36, 0.72, -0.59] },
+      { name: '鎏金夕照', dir: [-0.58, 0.34, -0.74] },
+      { name: '极地清晖', dir: [0.28, 0.52, -0.81] }
+    ];
+    let sunPresetIdx = 0;
+    let sunDir = normalize3(SUN_PRESETS[0].dir.slice());
+    let targetSunDir = sunDir.slice();
+
+    function normalize3(v) {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
     }
-    col += s2/7.0*0.28*uSunVis;
-  }
 
-  col *= 1.05;
-  col = clamp((col*(2.51*col+0.03))/(col*(2.43*col+0.59)+0.14), 0.0, 1.0);
-  col = pow(col, vec3(1.0/2.2));
-  vec2 q = vUv - 0.5;
-  float vig = 1.0 - (0.45 - 0.05*uIdle)*dot(q,q);
-  col *= vig;
-  float grain = (hash1(gl_FragCoord.xy + floor(uTime*12.0)) - 0.5)*(0.005 + 0.002*uIdle);
-  col += grain;
-  outColor = vec4(col, 1.0);
-}`;
+    function describeState(t) {
+      if (t <= -10) return { label: '深冻结晶冰', code: 'SOLID ICE (Ih)', color: '#7dd3fc' };
+      if (t <= 0.5) return { label: '冰水相变态', code: 'SOLID / LIQUID', color: '#93e2fb' };
+      if (t < 45)   return { label: '常温液态水', code: 'LIQUID H₂O', color: '#7ce8d8' };
+      if (t < 92)   return { label: '温热对流水', code: 'THERMAL LIQUID', color: '#5eead4' };
+      if (t <= 108) return { label: '剧烈沸腾态', code: 'NUCLEATE BOIL', color: '#fbbf24' };
+      return               { label: '过热水蒸气', code: 'VAPOR STEAM', color: '#fb923c' };
+    }
 
-/* ================= 编译辅助 ================= */
-function compile(type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src); gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-    throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n'));
-  return s;
-}
-function program(vs, fs) {
-  const p = gl.createProgram();
-  gl.attachShader(p, compile(gl.VERTEX_SHADER, '#version 300 es\n' + vs));
-  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, '#version 300 es\n' + fs));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  p._u = {};
-  return p;
-}
-function U(p, n) { return p._u[n] !== undefined ? p._u[n] : (p._u[n] = gl.getUniformLocation(p, n)); }
-
-const progWater = program(VS_WATER, FS_WATER);
-const progSeabed = program(VS_SEABED, FS_SEABED);
-const progSky = program(VS_SKY, FS_SKY);
-const progSteam = program(VS_STEAM, FS_STEAM);
-const progSnow = program(VS_SNOW, FS_SNOW);
-const progPost = program(VS_POST, FS_POST);
-
-/* ================= 几何体 ================= */
-function vao(bindFn, attrs) {
-  const v = gl.createVertexArray();
-  gl.bindVertexArray(v);
-  bindFn();
-  gl.bindVertexArray(null);
-  return v;
-}
-function attrib(loc, data, size, stride = 0, offset = 0) {
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, offset);
-}
-// 水面网格
-const waterVAO = (() => {
-  const N = LOW_QUALITY ? 140 : 300, half = 20;
-  const verts = [], idx = [];
-  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++)
-    verts.push(-half + 40 * i / N, 0, -half + 40 * j / N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
-    idx.push(a, c, b, b, c, d);
-  }
-  const ib = gl.createBuffer();
-  const v = vao(() => {
-    attrib(0, new Float32Array(verts), 3);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
-  });
-  v.count = idx.length;
-  return v;
-})();
-// 海床
-const seabedVAO = (() => {
-  const ib = gl.createBuffer();
-  const v = vao(() => {
-    attrib(0, new Float32Array([-60, -2.35, -60, 60, -2.35, -60, -60, -2.35, 60, 60, -2.35, 60]), 3);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 2, 1, 3]), gl.STATIC_DRAW);
-  });
-  v.count = 6;
-  return v;
-})();
-// 全屏大三角
-const triVAO = vao(() => attrib(0, new Float32Array([-1, -1, 3, -1, -1, 3]), 2));
-// 蒸汽羽流 24 块
-const steamVAO = (() => {
-  const corners = [-1, -1, 1, -1, -1, 1, 1, 1], verts = [], idx = [];
-  for (let q = 0; q < 24; q++) {
-    for (let c = 0; c < 4; c++) verts.push(corners[c * 2], corners[c * 2 + 1], q * 7.13 + 1.7);
-    const b = q * 4; idx.push(b, b + 1, b + 2, b + 2, b + 1, b + 3);
-  }
-  const ib = gl.createBuffer();
-  const v = vao(() => {
-    attrib(0, new Float32Array(verts), 2, 12, 0);
-    attrib(1, new Float32Array(verts), 1, 12, 8);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
-  });
-  v.count = idx.length;
-  return v;
-})();
-// 雪 160 点
-const snowVAO = (() => {
-  const seeds = new Float32Array(160 * 4);
-  for (let i = 0; i < 160; i++) {
-    seeds[i * 4] = Math.random() * 14 - 7;
-    seeds[i * 4 + 1] = Math.random() * 4.6;
-    seeds[i * 4 + 2] = Math.random() * 12 - 9;
-    seeds[i * 4 + 3] = Math.random() * 100;
-  }
-  return vao(() => attrib(0, seeds, 4));
-})();
-
-/* ================= 场景 FBO ================= */
-let sceneFBO = null, fboW = 0, fboH = 0;
-let dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
-let resAdj = LOW_QUALITY ? 0.7 : 1.0;
-function makeFBO(w, h) {
-  if (sceneFBO) {
-    gl.deleteTexture(sceneFBO.tex);
-    gl.deleteRenderbuffer(sceneFBO.depth);
-    gl.deleteFramebuffer(sceneFBO.fb);
-  }
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  if (useHDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  const filter = gl.LINEAR;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const fb = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  // 离屏目标必须有深度缓冲，否则海床、水面与粒子的遮挡测试失效。
-  const depth = gl.createRenderbuffer();
-  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
-  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
-  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
-  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-  gl.bindRenderbuffer(gl.RENDERBUFFER, null);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Scene framebuffer incomplete: ' + status);
-  sceneFBO = { tex, fb, depth };
-  fboW = w; fboH = h;
-}
-function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, LOW_QUALITY ? 1 : 1.75);
-  const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
-  const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-  const fw = Math.max(2, Math.floor(w * resAdj)), fh = Math.max(2, Math.floor(h * resAdj));
-  if (fw !== fboW || fh !== fboH) makeFBO(fw, fh);
-}
-window.addEventListener('resize', resize);
-
-/* ================= 场景状态 ================= */
-const SUN = v3norm([-0.32, 0.42, -0.85]);
-const CAM_POS = [0, 1.65, 7.2];
-const FOV = 55 * Math.PI / 180;
-let yaw = 0, pitch = -0.52;
-let yawV = 0, pitchV = 0;               // 相机角速度（惯性）
-let zoom = 0, zoomV = 0;                // 滚轮缩放（0 近 → 1 远）
-let camPos = CAM_POS.slice();           // 动态相机位置（含 idle 呼吸）
-let simTime = 0;
-let targetTemp = 24, dispTemp = 24;
-let tempVel = 0;                        // 温度变化率 °C/s（驱动色差脉冲）
-// —— 相变冲击 / 打击感特效状态 ——
-let flash = 0, aberr = 0, shake = 0, shakeAng = 0, shakeFreq = 0;
-let icePrev = 0, steamPrev = 0;         // 相变跨越检测
-let idleAmt = 0;                        // 静止呼吸权重
-let idleClock = 0;                      // 仅静止时前进的相位钟
-let lastActive = 0;                     // 上次交互的 simTime
-
-// URL 预置：?state=ice|water|steam  ?ui=0  ?debug
-{
-  const s = params.get('state');
-  if (s === 'ice') targetTemp = dispTemp = -36;
-  else if (s === 'steam') targetTemp = dispTemp = 130;
-  else if (s === 'water') targetTemp = dispTemp = 24;
-  else if (params.has('temp')) {
-    const custom = Number(params.get('temp'));
-    if (Number.isFinite(custom)) targetTemp = dispTemp = clamp(custom,-36,150);
-  }
-  slider.value = String(targetTemp);
-  targetReading.textContent = Math.round(targetTemp) + '°C';
-  markPresets([-36,24,130].includes(targetTemp) ? targetTemp : NaN);
-  if (params.get('ui') === '0') {
-    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.add('ui-off'));
-    $('#panel').inert = true;
-  }
-}
-
-// 涟漪槽
-const NR = 24;
-const ripples = new Float32Array(NR * 4).fill(0);
-for (let i = 0; i < NR; i++) ripples[i * 4 + 2] = -100;
-let rippleHead = 0;
-function addRipple(x, z, k) {
-  const i = rippleHead; rippleHead = (rippleHead + 1) % NR;
-  ripples[i * 4] = x; ripples[i * 4 + 1] = z;
-  ripples[i * 4 + 2] = simTime; ripples[i * 4 + 3] = k || (0.32 + Math.random() * 0.1);
-}
-
-// 每帧导出的状态参数
-let P = {};
-function updateStateParams() {
-  const t = dispTemp;
-  const ice = ssj(1.5, -4, t);
-  const deepIce = ssj(-10, -34, t);
-  // Begin visible vapor close to boiling instead of as early as 72°C.
-  const steam = ssj(92, 108, t) * (1 - ice);
-  const warm = ssj(35, 95, t) * (1 - steam);
-  const snow = ssj(-3, -13, t);
-  const mix3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-  let deep = mix3([0.010, 0.085, 0.110], [0.025, 0.150, 0.160], clamp(warm * 0.8 + steam * 0.4, 0, 1));
-  deep = mix3(deep, [0.040, 0.190, 0.220], ice);
-  let waterCol = mix3([0.040, 0.300, 0.330], [0.070, 0.360, 0.330], warm);
-  P = { ice, deepIce, steam, warm, snow, waveAmp: Math.max(0, 1 - 0.96 * ice - 0.025 * deepIce) * (1 - 0.16 * steam), deep, waterCol };
-}
-
-/* ================= 输入 ================= */
-let dragging = false, moved = 0, lastX = 0, lastY = 0;
-canvas.addEventListener('pointerdown', e => {
-  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
-  yawV = 0; pitchV = 0;                 // 按住即接管，清掉惯性
-  lastActive = simTime;
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener('pointermove', e => {
-  if (!dragging) return;
-  const dx = e.clientX - lastX, dy = e.clientY - lastY;
-  lastX = e.clientX; lastY = e.clientY;
-  moved += Math.abs(dx) + Math.abs(dy);
-  if (moved > 6) {
-    lastActive = simTime;
-    yaw = clamp(yaw - dx * 0.0032, -1.25, 1.25);
-    pitch = clamp(pitch - dy * 0.0032, -1.15, -0.15);
-    // 记录瞬时角速度（指数平滑），松手后作为惯性初速度
-    const k = 0.55;
-    yawV = yawV * (1 - k) + (-dx * 0.0032 * 60) * k;
-    pitchV = pitchV * (1 - k) + (-dy * 0.0032 * 60) * k;
-  }
-});
-canvas.addEventListener('pointerup', e => {
-  dragging = false;
-  if (moved <= 6 && P.ice < 0.6) {
-    lastActive = simTime;
-    const B = camBasis(yaw, pitch);
-    const ndcX = (e.clientX / canvas.clientWidth) * 2 - 1;
-    const ndcY = 1 - (e.clientY / canvas.clientHeight) * 2;
-    const tf = Math.tan(FOV / 2), asp = canvas.clientWidth / canvas.clientHeight;
-    const dir = v3norm([
-      B.f[0] + B.r[0] * ndcX * tf * asp + B.u[0] * ndcY * tf,
-      B.f[1] + B.r[1] * ndcX * tf * asp + B.u[1] * ndcY * tf,
-      B.f[2] + B.r[2] * ndcX * tf * asp + B.u[2] * ndcY * tf]);
-    if (dir[1] < -0.02) {
-      const t = -camPos[1] / dir[1];
-      const px = camPos[0] + dir[0] * t, pz = camPos[2] + dir[2] * t;
-      if (Math.abs(px) < 13 && Math.abs(pz) < 13) {
-        addRipple(px, pz, 0.5 + Math.random() * 0.12);   // 加强涟漪
-        // —— 打击感：轻微色差 + 震动 ——
-        aberr = Math.max(aberr, reducedMotion.matches ? 0 : 0.005);
-        shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0015);
-        shakeAng = Math.random() * Math.PI * 2; shakeFreq = 26;
+    function syncPresetButtons(t) {
+      for (const btn of presetBtns) {
+        const p = Number(btn.dataset.temp);
+        btn.classList.toggle('on', Math.abs(t - p) < 0.35);
       }
     }
-  }
-});
-canvas.addEventListener('pointercancel', () => dragging = false);
-// 滚轮缩放（0 近 → 1 远）
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  lastActive = simTime;
-  zoomV += (e.deltaY > 0 ? 1 : -1) * 0.38 * Math.min(Math.abs(e.deltaY), 120) / 60;
-  zoomV = clamp(zoomV, -1.4, 1.4);
-}, { passive: false });
 
-slider.addEventListener('input', () => setTemp(+slider.value, false));
-presetBtns.forEach(b => b.addEventListener('click', () => setTemp(+b.dataset.t, true)));
-function setTemp(t, fromPreset) {
-  targetTemp = t;
-  lastActive = simTime;
-  targetReading.textContent = Math.round(t) + '°C';
-  // 预设分享相态，自由温度写入 temp，刷新或分享链接均能复现。
-  const st = { '-36': 'ice', '24': 'water', '130': 'steam' }[String(t)];
-  const url = new URL(location.href);
-  if (st) { url.searchParams.set('state', st); url.searchParams.delete('temp'); }
-  else { url.searchParams.delete('state'); url.searchParams.set('temp', String(t)); }
-  history.replaceState(null, '', url);
-  if (fromPreset) {
-    slider.value = t;
-    markPresets(t);
-    presetBtns.forEach(b => { if (+b.dataset.t === t) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
-  } else {
-    markPresets(NaN);   // 自由温度：不高亮任何预设（updateUI 会按最近预设回标）
-  }
-}
-window.addEventListener('keydown', e => {
-  if (e.key === '1') setTemp(-36, true);
-  if (e.key === '2') setTemp(24, true);
-  if (e.key === '3') setTemp(130, true);
-  if (e.key === 'h' || e.key === 'H') {
-    const hidden = !$('#panel').classList.contains('ui-off');
-    ['panel', 'title', 'hint'].forEach(id => $('#' + id).classList.toggle('ui-off', hidden));
-    $('#panel').inert = hidden; // 已隐藏的控件也退出键盘 Tab 顺序
-    const url = new URL(location.href);
-    if (hidden) url.searchParams.set('ui', '0'); else url.searchParams.delete('ui');
-    history.replaceState(null, '', url);
-  }
-});
-
-let lastBadge = '', lastPhase = '', lastNear = null;
-function updateUI() {
-  const t = dispTemp, p = P;
-  let name, color;
-  if (p.ice > 0.85) { name = '凝固态 · 冰'; color = '#9adcff'; }
-  else if (p.ice > 0.05) { name = '正在结冰…'; color = '#bfe8ff'; }
-  else if (p.steam > 0.85) { name = '蒸发态 · 汽'; color = '#ffb36b'; }
-  else if (p.steam > 0.05) { name = '正在沸腾…'; color = '#ffd39b'; }
-  else { name = '液态 · 水'; color = '#5fe8cf'; }
-  const deg = Math.round(t) + '°C';
-  if (deg + name !== lastBadge) {
-    badgeT.textContent = deg;
-    badgeS.textContent = name;
-    badge.style.setProperty('--state', color);
-    lastBadge = deg + name;
-  }
-  // 仅在相态名称变化时弹跳徽章，拖动滑杆不再每帧 pop
-  if (name !== lastPhase) {
-    lastPhase = name;
-    badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop');
-  }
-  const exactPreset = [-36,24,130].includes(targetTemp) ? targetTemp : 'custom';
-  if (exactPreset !== lastNear) { lastNear = exactPreset; markPresets(exactPreset); }
-}
-
-/* ================= 渲染 ================= */
-function setCommon(p, B, VP) {
-  gl.uniformMatrix4fv(U(p, 'uVP'), false, VP);
-  gl.uniform3f(U(p, 'uCam'), camPos[0], camPos[1], camPos[2]);
-  gl.uniform3f(U(p, 'uSun'), SUN[0], SUN[1], SUN[2]);
-  gl.uniform1f(U(p, 'uTime'), simTime);
-  return p;
-}
-
-let ema = 16, qTimer = 0;
-function updateQuality(dt) {
-  // Manual modes are stable presets; only auto changes resolution under load.
-  if (qualityMode !== 'auto') return;
-  qTimer += dt;
-  if (qTimer > 1.6) {
-    qTimer = 0;
-    const steps = [1.0, 0.85, 0.7, 0.55];
-    let i = steps.indexOf(resAdj);
-    if (ema > 26 && i < steps.length - 1) { resAdj = steps[i + 1]; resize(); }
-    else if (ema < 15 && i > 0) { resAdj = steps[i - 1]; resize(); }
-  }
-}
-
-function render() {
-  window.__renderCount++;
-  resize();
-  // 速度耦合倾斜：俯仰随角速度轻微前倾/后仰，横滚随偏航速度侧倾（松手滑行时最明显）
-  const leanP = dragging ? 0 : clamp(-pitchV * 0.030, -0.055, 0.055);
-  const roll = clamp(yawV * 0.045, -0.05, 0.05);
-  const B = rollBasis(camBasis(yaw, pitch + leanP), roll);
-  const asp = canvas.width / canvas.height;
-  const view = m4View(camPos, B);
-  const proj = m4Persp(FOV, asp, 0.1, 120);
-  const VP = m4Mul(proj, view);
-
-  // 太阳屏幕位置
-  let sunUV = [0.5, 0.5], sunVis = 0;
-  {
-    const px = camPos[0] + SUN[0] * 800, py = camPos[1] + SUN[1] * 800, pz = camPos[2] + SUN[2] * 800;
-    const cx = VP[0] * px + VP[4] * py + VP[8] * pz + VP[12];
-    const cy = VP[1] * px + VP[5] * py + VP[9] * pz + VP[13];
-    const cw = VP[3] * px + VP[7] * py + VP[11] * pz + VP[15];
-    if (cw > 0.01) {
-      const nx = cx / cw, ny = cy / cw;
-      if (Math.abs(nx) < 1.7 && Math.abs(ny) < 1.7) { sunVis = 1; sunUV = [nx * 0.5 + 0.5, ny * 0.5 + 0.5]; }
+    function updateURLState(t) {
+      try {
+        const u = new URL(location.href);
+        if (Math.abs(t - (-15)) < 0.25) {
+          u.searchParams.set('state', 'ice');
+          u.searchParams.delete('temp');
+        } else if (Math.abs(t - 25) < 0.25) {
+          u.searchParams.set('state', 'water');
+          u.searchParams.delete('temp');
+        } else if (Math.abs(t - 160) < 0.25) {
+          u.searchParams.set('state', 'steam');
+          u.searchParams.delete('temp');
+        } else {
+          u.searchParams.delete('state');
+          u.searchParams.set('temp', String(Math.round(t * 2) / 2));
+        }
+        history.replaceState(null, '', u);
+      } catch (_) {}
     }
-  }
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO.fb);
-  gl.viewport(0, 0, fboW, fboH);
-  gl.disable(gl.BLEND);
-  gl.clearColor(P.deep[0], P.deep[1], P.deep[2], 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  // 天空
-  gl.disable(gl.DEPTH_TEST);
-  gl.useProgram(progSky);
-  gl.bindVertexArray(triVAO);
-  gl.uniform3f(U(progSky, 'uCamR'), B.r[0], B.r[1], B.r[2]);
-  gl.uniform3f(U(progSky, 'uCamU'), B.u[0], B.u[1], B.u[2]);
-  gl.uniform3f(U(progSky, 'uCamF'), B.f[0], B.f[1], B.f[2]);
-  gl.uniform1f(U(progSky, 'uTanF'), Math.tan(FOV / 2));
-  gl.uniform1f(U(progSky, 'uAspect'), asp);
-  gl.uniform3f(U(progSky, 'uSun'), SUN[0], SUN[1], SUN[2]);
-  gl.uniform3f(U(progSky, 'uCam'), camPos[0], camPos[1], camPos[2]);
-  gl.uniform1f(U(progSky, 'uTime'), simTime);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-  // 海床
-  gl.enable(gl.DEPTH_TEST);
-  gl.useProgram(progSeabed);
-  gl.bindVertexArray(seabedVAO);
-  setCommon(progSeabed, B, VP);
-  gl.uniform3f(U(progSeabed, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
-  gl.uniform1f(U(progSeabed, 'uIce'), P.ice);
-  gl.uniform1f(U(progSeabed, 'uDeepIce'), P.deepIce);
-  gl.uniform1f(U(progSeabed, 'uSteam'), P.steam);
-  gl.uniform1f(U(progSeabed, 'uWarm'), P.warm);
-  gl.drawElements(gl.TRIANGLES, seabedVAO.count, gl.UNSIGNED_SHORT, 0);
-
-  // 水面（预乘 alpha 混合）
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  gl.useProgram(progWater);
-  gl.bindVertexArray(waterVAO);
-  setCommon(progWater, B, VP);
-  gl.uniform1f(U(progWater, 'uWaveAmp'), P.waveAmp * (1 + 0.07 * idleAmt * Math.sin(idleClock * 0.4)));
-  gl.uniform1f(U(progWater, 'uSteam'), P.steam);
-  gl.uniform1f(U(progWater, 'uIce'), P.ice);
-  gl.uniform1f(U(progWater, 'uDeepIce'), P.deepIce);
-  gl.uniform1f(U(progWater, 'uWarm'), P.warm);
-  gl.uniform3f(U(progWater, 'uWaterCol'), P.waterCol[0], P.waterCol[1], P.waterCol[2]);
-  gl.uniform3f(U(progWater, 'uDeep'), P.deep[0], P.deep[1], P.deep[2]);
-  gl.uniform4fv(U(progWater, 'uRipple'), ripples);
-  gl.drawElements(gl.TRIANGLES, waterVAO.count, gl.UNSIGNED_INT, 0);
-
-  // 蒸汽
-  if (P.steam > 0.003) {
-    gl.depthMask(false);
-    gl.useProgram(progSteam);
-    gl.bindVertexArray(steamVAO);
-    gl.uniformMatrix4fv(U(progSteam, 'uVP'), false, VP);
-    gl.uniform3f(U(progSteam, 'uCamR'), B.r[0], B.r[1], B.r[2]);
-    gl.uniform3f(U(progSteam, 'uCamU'), B.u[0], B.u[1], B.u[2]);
-    gl.uniform1f(U(progSteam, 'uTime'), simTime);
-    gl.uniform1f(U(progSteam, 'uSteam'), P.steam);
-    gl.drawElements(gl.TRIANGLES, steamVAO.count, gl.UNSIGNED_SHORT, 0);
-    gl.depthMask(true);
-  }
-  // 雪
-  if (P.snow > 0.003) {
-    gl.depthMask(false);
-    gl.useProgram(progSnow);
-    gl.bindVertexArray(snowVAO);
-    gl.uniformMatrix4fv(U(progSnow, 'uVP'), false, VP);
-    gl.uniform1f(U(progSnow, 'uTime'), simTime);
-    gl.uniform1f(U(progSnow, 'uSnow'), P.snow);
-    gl.uniform1f(U(progSnow, 'uDPR'), dpr);
-    gl.drawArrays(gl.POINTS, 0, 160);
-    gl.depthMask(true);
-  }
-  gl.disable(gl.BLEND);
-
-  // 后处理
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.disable(gl.DEPTH_TEST);
-  gl.useProgram(progPost);
-  gl.bindVertexArray(triVAO);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, sceneFBO.tex);
-  gl.uniform1i(U(progPost, 'uTex'), 0);
-  gl.uniform1f(U(progPost, 'uTime'), simTime);
-  gl.uniform1f(U(progPost, 'uSteam'), P.steam);
-  gl.uniform2f(U(progPost, 'uSunUV'), sunUV[0], sunUV[1]);
-  gl.uniform1f(U(progPost, 'uSunVis'), sunVis);
-  gl.uniform1f(U(progPost, 'uHdr'), useHDR ? 1 : 0);
-  gl.uniform1f(U(progPost, 'uFlash'), flash);
-  gl.uniform1f(U(progPost, 'uAberr'), aberr);
-  gl.uniform1f(U(progPost, 'uShake'), shake * Math.sin(shakeAng));
-  gl.uniform1f(U(progPost, 'uIdle'), idleAmt);
-  gl.uniform2f(U(progPost, 'uShakeDir'), Math.cos(shakeAng * 0.7), Math.sin(shakeAng * 0.7));
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-  gl.bindVertexArray(null);
-}
-
-/* ================= 主循环 ================= */
-updateStateParams();
-// URL initial preset is not a phase transition: suppress first-frame shock ripples.
-icePrev = P.ice;
-steamPrev = P.steam;
-resize();
-let last = performance.now(), fpsAcc = 0, fpsN = 0, lastReducedDraw = -Infinity;
-function frame(now) {
-  const dt = Math.min((now - last) / 1000, 0.1);
-  last = now;
-  ema = ema * 0.94 + (dt * 1000) * 0.06;
-  if (DEBUG) { fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('#fps').textContent = Math.round(fpsN / fpsAcc) + ' fps · ' + Math.round(fboW) + 'p'; fpsAcc = 0; fpsN = 0; } }
-  simTime += reducedMotion.matches ? 0 : dt;
-
-  // —— 温度缓动 + 变化率 ——
-  const prevDisp = dispTemp;
-  dispTemp += (targetTemp - dispTemp) * Math.min(1, dt * 1.6);
-  if (Math.abs(targetTemp - dispTemp) < 0.05) dispTemp = targetTemp;
-  tempVel = (dispTemp - prevDisp) / Math.max(dt, 1e-4);
-  updateStateParams();
-
-  // —— 相变跨越检测：闪白 + 震屏（max-not-sum 叠加）——
-  const crossedIce = (P.ice > 0.5) !== (icePrev > 0.5);
-  const crossedSteam = (P.steam > 0.5) !== (steamPrev > 0.5);
-  if (crossedIce || crossedSteam) {
-    flash = Math.max(flash, reducedMotion.matches ? 0 : 0.16);
-    shake = Math.max(shake, reducedMotion.matches ? 0 : 0.0035);
-    shakeAng = Math.random() * Math.PI * 2; shakeFreq = 18 + Math.random() * 8;
-    addRipple(camPos[0] * 0.6, camPos[2] * 0.6, 0.55);   // 相变冲击在水面荡一圈
-  }
-  icePrev = P.ice; steamPrev = P.steam;
-
-  // —— 温度变化率驱动色差脉冲 ——
-  const targetAberr = reducedMotion.matches ? 0 : Math.min(Math.abs(tempVel) * 0.0004, 0.0035);
-  aberr = Math.max(targetAberr, aberr - aberr * Math.min(1, dt * 2.2));
-  flash *= Math.exp(-dt * 3.4);
-  shake *= Math.exp(-dt * 3.0);
-  shakeAng += dt * shakeFreq;
-  if (flash < 5e-4) flash = 0;
-  if (shake < 2e-5) shake = 0;
-
-  // —— 相机惯性：欠阻尼弹簧（松手回弹）——
-  if (!dragging) {
-    const kDamp = 5.6;                              // 阻尼系数：轻微过冲后自然滑停
-    yaw += yawV * dt; pitch += pitchV * dt;
-    yawV -= yawV * kDamp * dt;
-    pitchV -= pitchV * kDamp * dt;
-    yaw = clamp(yaw, -1.25, 1.25); pitch = clamp(pitch, -1.15, -0.15);
-    if (Math.abs(yawV) < 0.004) yawV = 0;
-    if (Math.abs(pitchV) < 0.004) pitchV = 0;
-  }
-
-  // —— 滚轮缩放弹簧：1-exp(-k·dt) 帧率无关 ——
-  zoom = clamp(zoom + zoomV * dt * 2.4, 0, 1);
-  zoomV -= zoomV * Math.min(1, dt * 7.5);
-  if (Math.abs(zoomV) < 0.01) zoomV = 0;
-
-  // —— idle 呼吸：静止 3 秒后缓慢升起 ——
-  const quiet = simTime - lastActive;
-  idleAmt = clamp((quiet - 3) / 5, 0, 1);
-  if (!reducedMotion.matches && idleAmt > 0) idleClock += dt * (1 + idleAmt);
-  // Reduced motion disables idle camera drift, not temperature or pointer interaction.
-  const drift = reducedMotion.matches ? 0 : idleAmt * 0.5;
-  camPos[0] = CAM_POS[0] + Math.sin(idleClock * 0.21) * drift * 0.30;
-  camPos[1] = CAM_POS[1] + Math.sin(idleClock * 0.17 + 1.3) * drift * 0.14;
-  camPos[2] = CAM_POS[2] * (1 + zoom * 0.9) + Math.cos(idleClock * 0.13) * drift * 0.30;
-
-  if (!document.hidden) {
-    updateQuality(dt);
-    // When reduced motion is requested, redraw at most once per second while idle;
-    // continue rendering interactively during temperature changes, drag or zoom.
-    const changing = Math.abs(targetTemp - dispTemp) > 0.05 ||
-      dragging || Math.abs(yawV) > 0.004 || Math.abs(pitchV) > 0.004 ||
-      Math.abs(zoomV) > 0.01;
-    if (!window.__suspendRendering &&
-        (!reducedMotion.matches || changing || now - lastReducedDraw > 1000)) {
-      render();
-      lastReducedDraw = now;
+    function updateTelemetryHUD(t) {
+      const info = describeState(t);
+      badge.style.setProperty('--state', info.color);
+      document.documentElement.style.setProperty('--state', info.color);
+      badgeT.textContent = t.toFixed(1) + '°C';
+      if (info.label !== lastStateName) {
+        badgeS.textContent = info.label;
+        phaseCodeEl.textContent = info.code;
+        lastStateName = info.label;
+      }
+      const ice = ssj(2, -14, t);
+      const steam = ssj(92, 138, t);
+      const ior = (1.333 - 0.024 * ice - 0.18 * steam).toFixed(3);
+      const wavePct = Math.round(clamp((1 - 0.96 * ice) * (1 - 0.18 * steam), 0, 1) * 100);
+      iorReadoutEl.textContent = ior;
+      waveReadoutEl.textContent = wavePct + '%';
+      causticsReadoutEl.textContent = ice > 0.65 ? 'Frozen' : (steam > 0.7 ? 'Diffuse' : 'Active');
     }
-    updateUI();
-  }
-  window.__frames++;
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-</script>
+
+    function setTargetTemp(t, syncSlider = true, updateHistory = false) {
+      targetTemp = clamp(Number(t) || 0, -30, 170);
+      if (syncSlider) slider.value = String(targetTemp);
+      targetReading.textContent = targetTemp.toFixed(1) + ' °C';
+      syncPresetButtons(targetTemp);
+      if (updateHistory) updateURLState(targetTemp);
+    }
+
+    setTargetTemp(targetTemp, true, false);
+    updateTelemetryHUD(curTemp);
+
+    slider.addEventListener('input', () => {
+      setTargetTemp(Number(slider.value), false, false);
+    });
+    slider.addEventListener('change', () => {
+      updateURLState(targetTemp);
+    });
+
+    for (const btn of presetBtns) {
+      btn.addEventListener('click', () => {
+        const nextT = Number(btn.dataset.temp);
+        const prevT = targetTemp;
+        setTargetTemp(nextT, true, true);
+        if (Math.abs(nextT - prevT) > 5 && !reducedMotion) {
+          pushRipple(0, 0, 0.55);
+        }
+      });
+    }
+
+    for (const tick of tickSpans) {
+      tick.addEventListener('click', () => {
+        setTargetTemp(Number(tick.dataset.tick), true, true);
+      });
+    }
+
+    // =========================================================================
+    // 3. Directional Wave Spectrum Generation (22 Wave Trains)
+    // =========================================================================
+    const waveDef = [];
+    {
+      let seed = 1337;
+      const rand = () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      };
+      const waveCount = LOW_QUALITY ? 14 : 22;
+      for (let i = 0; i < waveCount; i++) {
+        const t = i / (waveCount - 1);
+        const len = mix(5.2, 0.26, Math.pow(t, 0.78));
+        const crossSwell = (i % 3 === 0) ? 0.58 : 0.28;
+        const ang = 0.42 + (rand() - 0.5) * 2.0 * crossSwell;
+        const dx = Math.cos(ang);
+        const dz = Math.sin(ang);
+        const k = (2.0 * Math.PI) / len;
+        const steepness = mix(0.095, 0.022, t) * (LOW_QUALITY && len < 0.55 ? 0.35 : 1.0);
+        const amp = steepness / k;
+        const w = Math.sqrt(9.81 * k) * mix(0.92, 1.08, rand());
+        waveDef.push({ dx, dz, k, amp, w, steep: steepness });
+      }
+    }
+
+    const WAVE_CODE = waveDef.map(w => {
+      const dx = w.dx.toFixed(5);
+      const dz = w.dz.toFixed(5);
+      const k = w.k.toFixed(5);
+      const amp = w.amp.toFixed(5);
+      const spd = w.w.toFixed(5);
+      const ka = (w.k * w.amp).toFixed(5);
+      return `{
+        float ph = ${k} * (${dx} * p.x + ${dz} * p.y) - ${spd} * uTime;
+        float s = sin(ph), c = cos(ph);
+        h += ${amp} * s;
+        grad += vec2(${dx}, ${dz}) * (${ka} * c);
+        disp -= vec2(${dx}, ${dz}) * (${ (w.amp * 0.48).toFixed(5) } * c);
+      }`;
+    }).join('\n');
+
+    // =========================================================================
+    // 4. Shared GLSL Noise, Optics & Sky Atmosphere Library
+    // =========================================================================
+    const NOISE = /* glsl */`
+      float hash1(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      vec2 hash2(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.xx + p3.yz) * p3.zy);
+      }
+
+      float vnoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        float a = hash1(i);
+        float b = hash1(i + vec2(1.0, 0.0));
+        float c = hash1(i + vec2(0.0, 1.0));
+        float d = hash1(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+      }
+
+      const mat2 ROT2 = mat2(0.80, -0.60, 0.60, 0.80);
+
+      float fbm(vec2 p) {
+        float v = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 4; i++) {
+          v += a * vnoise(p);
+          p = ROT2 * p * 2.03 + vec2(17.1, 31.7);
+          a *= 0.5;
+        }
+        return v;
+      }
+
+      // Analytical gradient noise for silky micro-normal water surface ripples
+      vec3 vnoiseGrad(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        vec2 du = 6.0 * f * (1.0 - f);
+        float a = hash1(i);
+        float b = hash1(i + vec2(1.0, 0.0));
+        float c = hash1(i + vec2(0.0, 1.0));
+        float d = hash1(i + vec2(1.0, 1.0));
+        float k0 = a;
+        float k1 = b - a;
+        float k2 = c - a;
+        float k3 = a - b - c + d;
+        float val = k0 + k1 * u.x + k2 * u.y + k3 * u.x * u.y;
+        vec2 grad = du * (vec2(k1, k2) + k3 * u.yx);
+        return vec3(val, grad);
+      }
+
+      vec2 worley(vec2 p) {
+        vec2 n = floor(p);
+        vec2 f = fract(p);
+        float d1 = 8.0;
+        float d2 = 8.0;
+        for (int j = -1; j <= 1; j++) {
+          for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = hash2(n + g);
+            vec2 r = g + o - f;
+            float d = dot(r, r);
+            if (d < d1) {
+              d2 = d1;
+              d1 = d;
+            } else if (d < d2) {
+              d2 = d;
+            }
+          }
+        }
+        return sqrt(vec2(d1, d2));
+      }
+
+      // Sharp caustic filament network (dual-layer domain-warped cellular focusing)
+      float web(vec2 p, float t) {
+        vec2 q = p + 0.18 * vec2(
+          vnoise(p * 1.6 + vec2(t * 0.4, -t * 0.3)),
+          vnoise(p * 1.6 + vec2(-t * 0.35, t * 0.45))
+        );
+        vec2 w1 = worley(q * 1.15 + vec2(t * 0.22, t * 0.16));
+        vec2 w2 = worley(ROT2 * q * 1.68 - vec2(t * 0.19, -t * 0.24));
+        float c1 = exp(-13.5 * abs(w1.y - w1.x));
+        float c2 = exp(-15.0 * abs(w2.y - w2.x));
+        float ridge1 = pow(clamp(1.0 - w1.x * 1.08, 0.0, 1.0), 4.5);
+        return clamp(c1 * 0.72 + c2 * 0.55 + ridge1 * 0.35, 0.0, 1.6);
+      }
+
+      vec3 skyColor(vec3 rd, vec3 sunDir) {
+        float y = clamp(rd.y, 0.0, 1.0);
+        vec3 zenith = vec3(0.055, 0.21, 0.34);
+        vec3 midSky = vec3(0.18, 0.48, 0.62);
+        vec3 horizon = vec3(0.62, 0.85, 0.89);
+        vec3 col = mix(horizon, midSky, pow(y, 0.38));
+        col = mix(col, zenith, pow(y, 1.15));
+
+        float sunAmt = max(dot(rd, sunDir), 0.0);
+        col += vec3(0.96, 0.84, 0.64) * (0.24 * pow(sunAmt, 6.0) + 0.38 * pow(sunAmt, 36.0));
+        col += vec3(1.5, 1.38, 1.15) * smoothstep(0.9991, 0.99985, sunAmt);
+        col += vec3(0.22, 0.18, 0.12) * pow(1.0 - y, 6.0) * max(sunDir.y, 0.15);
+        return col;
+      }
+
+      vec4 mountains(vec3 rd, vec3 sunDir) {
+        if (rd.y < -0.05 || rd.y > 0.28) return vec4(0.0);
+        float az = atan(rd.x, -rd.z);
+        float ridge = 0.085 * vnoise(vec2(az * 3.2, 1.4))
+                    + 0.042 * vnoise(vec2(az * 7.8 + 4.1, 2.7))
+                    + 0.018 * vnoise(vec2(az * 16.5, 5.3)) - 0.015;
+        float m = 1.0 - smoothstep(ridge - 0.004, ridge + 0.003, rd.y);
+        if (m <= 0.001) return vec4(0.0);
+        float sunLit = clamp(0.5 + 0.5 * sin(az * 3.0 + sunDir.x * 2.5), 0.0, 1.0);
+        vec3 mCol = mix(vec3(0.09, 0.22, 0.29), vec3(0.26, 0.46, 0.54), sunLit * 0.55);
+        float snowLine = smoothstep(0.075, 0.125, rd.y + 0.015 * vnoise(vec2(az * 24.0, 8.0)));
+        mCol = mix(mCol, vec3(0.78, 0.90, 0.94), snowLine * 0.65);
+        float aerial = smoothstep(0.0, 0.11, ridge - rd.y);
+        vec3 fogCol = skyColor(vec3(rd.x, 0.02, rd.z), sunDir);
+        mCol = mix(fogCol, mCol, clamp(0.32 + 0.35 * aerial, 0.0, 0.72));
+        return vec4(mCol, m);
+      }
+    `;
+
+    // =========================================================================
+    // 5. Shaders (Water, Seabed, Sky, Steam, Snow, Post)
+    // =========================================================================
+    const VS_WATER = /* glsl */`#version 300 es
+      precision highp float;
+      layout(location = 0) in vec2 aPos;
+
+      uniform mat4 uVP;
+      uniform float uTime, uWaveAmp, uSteam;
+      uniform vec3 uCam;
+      uniform vec4 uRipple[24];
+
+      out vec3 vWorldPos;
+      out vec3 vNormal;
+      out float vCrest;
+      out float vRippleEnergy;
+
+      void main() {
+        vec2 p = aPos;
+        float dist = length(p);
+        float atten = 1.0 / (1.0 + 0.012 * dist * dist);
+        float dAtten_dDist = -0.024 * dist * atten * atten;
+        vec2 dDist_dp = dist > 1e-4 ? (p / dist) : vec2(0.0);
+
+        float h = 0.0;
+        vec2 grad = vec2(0.0);
+        vec2 disp = vec2(0.0);
+
+        ${WAVE_CODE}
+
+        float ripH = 0.0;
+        vec2 ripGrad = vec2(0.0);
+        float ripEnergy = 0.0;
+        for (int i = 0; i < 24; i++) {
+          vec4 rp = uRipple[i];
+          if (rp.w <= 0.001) continue;
+          float age = uTime - rp.z;
+          if (age <= 0.0 || age > 6.5) continue;
+          vec2 dVec = p - rp.xy;
+          float r = length(dVec);
+          float front = r - age * 2.55;
+          float env = rp.w * exp(-0.62 * age) * exp(-0.14 * r) * exp(-3.5 * front * front);
+          if (env > 1e-4) {
+            float phase = 8.0 * front;
+            float s = sin(phase);
+            float c = cos(phase);
+            ripH += env * s;
+            float dEnv_dr = env * (-0.14 - 7.0 * front);
+            float dWave_dr = dEnv_dr * s + env * 8.0 * c;
+            vec2 dir = r > 1e-4 ? (dVec / r) : vec2(0.0);
+            ripGrad += dir * dWave_dr;
+            ripEnergy += env * abs(c);
+          }
+        }
+
+        float boilH = 0.0;
+        vec2 boilGrad = vec2(0.0);
+        if (uSteam > 0.001) {
+          float bAmp = 0.055 * uSteam * atten;
+          float bx = p.x * 3.8 + uTime * 5.2;
+          float bz = p.y * 3.8 - uTime * 4.7;
+          float sx = sin(bx), cx = cos(bx);
+          float sz = sin(bz), cz = cos(bz);
+          boilH = bAmp * sx * sz;
+          boilGrad = bAmp * 3.8 * vec2(cx * sz, sx * cz);
+        }
+
+        float rawH = uWaveAmp * h;
+        vec2 rawGrad = uWaveAmp * grad;
+
+        float finalH = rawH * atten + ripH + boilH;
+        vec2 finalGrad = rawGrad * atten + rawH * dAtten_dDist * dDist_dp + ripGrad + boilGrad;
+
+        vec3 worldPos = vec3(p.x + disp.x * uWaveAmp * atten, finalH, p.y + disp.y * uWaveAmp * atten);
+        vWorldPos = worldPos;
+        vNormal = normalize(vec3(-finalGrad.x, 1.0, -finalGrad.y));
+        vCrest = clamp(rawH * 3.2 + ripEnergy * 1.6 + abs(boilH) * 5.0, 0.0, 1.5);
+        vRippleEnergy = clamp(ripEnergy * 2.2, 0.0, 1.0);
+
+        gl_Position = uVP * vec4(worldPos, 1.0);
+      }
+    `;
+
+    const FS_WATER = /* glsl */`#version 300 es
+      precision highp float;
+
+      in vec3 vWorldPos;
+      in vec3 vNormal;
+      in float vCrest;
+      in float vRippleEnergy;
+
+      uniform vec3 uCam;
+      uniform vec3 uSun;
+      uniform vec3 uWaterCol;
+      uniform vec3 uDeep;
+      uniform float uTime;
+      uniform float uIce;
+      uniform float uSteam;
+      uniform float uDeepIce;
+      uniform float uWarm;
+      uniform sampler2D uRefractTex;
+      uniform vec2 uInvRes;
+
+      out vec4 fragColor;
+
+      ${NOISE}
+
+      void main() {
+        vec3 V = normalize(uCam - vWorldPos);
+        vec3 L = normalize(uSun);
+        float dist = length(vWorldPos.xz);
+        float distFade = exp(-0.022 * dist);
+
+        // 1. Dual-Cascade Analytical Micro-Normals (Capillary Surface Tension Ripples)
+        vec2 uv1 = vWorldPos.xz * 2.15 + vec2(uTime * 0.42, -uTime * 0.31);
+        vec2 uv2 = ROT2 * vWorldPos.xz * 4.35 + vec2(-uTime * 0.54, uTime * 0.48);
+        vec2 uv3 = vWorldPos.xz * 8.80 + vec2(uTime * 0.85, uTime * 0.62);
+
+        vec3 g1 = vnoiseGrad(uv1);
+        vec3 g2 = vnoiseGrad(uv2);
+        vec3 g3 = vnoiseGrad(uv3);
+
+        float microScale = mix(0.145, 0.02, uIce) * (0.35 + 0.65 * distFade);
+        vec2 microGrad = (g1.yz * 0.55 + g2.yz * 0.32 + g3.yz * 0.18) * microScale;
+
+        if (uSteam > 0.01) {
+          vec3 gBoil = vnoiseGrad(vWorldPos.xz * 7.5 + vec2(uTime * 3.8, -uTime * 3.4));
+          microGrad += gBoil.yz * (0.22 * uSteam * distFade);
+        }
+
+        vec3 N = normalize(vec3(
+          vNormal.x - microGrad.x,
+          vNormal.y,
+          vNormal.z - microGrad.y
+        ));
+
+        // 2. Ice Crystalline Voronoi Fracture & Internal Parallax Cracks
+        float iceCrackSurface = 0.0;
+        float iceCrackDeep = 0.0;
+        float frostGrain = 0.0;
+        if (uIce > 0.005) {
+          vec2 iceP = vWorldPos.xz * 0.92;
+          vec2 warp = 0.14 * vec2(vnoise(iceP * 2.4), vnoise(iceP * 2.4 + 19.3));
+          vec2 wPrimary = worley(iceP + warp);
+          vec2 wSecondary = worley(iceP * 2.6 - warp * 1.5);
+          iceCrackSurface = smoothstep(0.055, 0.004, wPrimary.y - wPrimary.x);
+          iceCrackSurface += 0.55 * smoothstep(0.045, 0.003, wSecondary.y - wSecondary.x);
+
+          vec2 parallaxOffset = -V.xz / max(V.y + 0.35, 0.25) * 0.22;
+          vec2 wDeep = worley((iceP + parallaxOffset) * 1.35 + warp * 0.8);
+          iceCrackDeep = smoothstep(0.065, 0.006, wDeep.y - wDeep.x);
+
+          frostGrain = fbm(vWorldPos.xz * 6.5);
+          N = normalize(N + vec3(
+            (frostGrain - 0.5) * 0.18 * uIce,
+            0.0,
+            (iceCrackSurface - 0.3) * 0.22 * uIce
+          ));
+        }
+
+        float NoV = max(dot(N, V), 0.001);
+        float NoL = max(dot(N, L), 0.0);
+
+        // 3. True Screen-Space Chromatic Refraction + Physical Beer-Lambert Absorption
+        vec2 screenUV = gl_FragCoord.xy * uInvRes;
+        float refractStrength = mix(0.055, 0.095, uIce) * (1.0 / (1.0 + 0.08 * dist));
+        vec2 refractOffset = N.xz * refractStrength;
+
+        float dispSpread = mix(0.014, 0.036, uIce);
+        vec2 uvR = clamp(screenUV + refractOffset * (1.0 - dispSpread), vec2(0.002), vec2(0.998));
+        vec2 uvG = clamp(screenUV + refractOffset, vec2(0.002), vec2(0.998));
+        vec2 uvB = clamp(screenUV + refractOffset * (1.0 + dispSpread), vec2(0.002), vec2(0.998));
+
+        vec3 seabedSample = vec3(
+          texture(uRefractTex, uvR).r,
+          texture(uRefractTex, uvG).g,
+          texture(uRefractTex, uvB).b
+        );
+
+        float waterDepth = max(0.25, 1.65 + vWorldPos.y);
+        float opticalPath = waterDepth / max(NoV, 0.22);
+
+        vec3 sigma = mix(
+          vec3(0.44, 0.092, 0.048),
+          vec3(0.32, 0.075, 0.032),
+          uWarm
+        );
+        vec3 transmittance = exp(-sigma * opticalPath * 1.15);
+
+        vec3 volumeScatter = mix(uDeep, uWaterCol, clamp(0.35 + 0.65 * NoV, 0.0, 1.0));
+        vec3 refractedCol = seabedSample * transmittance + volumeScatter * (1.0 - transmittance);
+
+        // 4. Wave-Crest Back-Lit Subsurface Scattering (SSS)
+        vec3 sssDir = normalize(L + N * 0.62);
+        float sssBack = pow( max(0.0, dot(V, -sssDir)), 3.2 );
+        float sssUp = max(0.0, N.y) * max(0.0, L.y);
+        float crestFactor = clamp(vCrest * 0.85 + 0.25 * (1.0 - NoV), 0.0, 1.3);
+        vec3 sssColor = vec3(0.12, 0.88, 0.78) * (0.42 * sssBack + 0.28 * sssUp) * crestFactor * (1.0 - 0.75 * uIce);
+        refractedCol += sssColor;
+
+        // 5. Sky & Mountain Reflection + Schlick Fresnel (IOR = 1.333 -> F0 = 0.0204)
+        vec3 R = reflect(-V, N);
+        R.y = max(R.y, 0.005);
+        vec3 reflCol = skyColor(R, L);
+        vec4 mtn = mountains(R, L);
+        reflCol = mix(reflCol, mtn.rgb, mtn.a);
+
+        float F0 = mix(0.0204, 0.038, uIce);
+        float fresnel = F0 + (1.0 - F0) * pow(1.0 - NoV, 5.0);
+        fresnel = clamp(fresnel, 0.0, 0.96);
+
+        vec3 surfaceCol = mix(refractedCol, reflCol, fresnel);
+
+        // 6. Dual-Lobe GGX Specular Sun Glint with Screen-Space Derivative Stabilization
+        vec3 H = normalize(L + V);
+        float NoH = max(dot(N, H), 0.0);
+        float nVar = length(fwidth(N));
+        float roughPrimary = clamp(mix(0.032, 0.14, uIce) + nVar * 0.35, 0.028, 0.35);
+        float roughSecondary = clamp(mix(0.16, 0.32, uIce) + nVar * 0.45, 0.12, 0.55);
+
+        float a2_1 = roughPrimary * roughPrimary * roughPrimary * roughPrimary;
+        float denom1 = (NoH * NoH * (a2_1 - 1.0) + 1.0);
+        float D1 = a2_1 / (3.14159265 * denom1 * denom1 + 1e-5);
+
+        float a2_2 = roughSecondary * roughSecondary * roughSecondary * roughSecondary;
+        float denom2 = (NoH * NoH * (a2_2 - 1.0) + 1.0);
+        float D2 = a2_2 / (3.14159265 * denom2 * denom2 + 1e-5);
+
+        vec3 sunSpec = vec3(1.45, 1.32, 1.08) * (D1 * 0.24 + D2 * 0.065) * NoL * (0.35 + 0.65 * fresnel);
+        surfaceCol += sunSpec * (1.0 - 0.45 * uSteam);
+
+        // 7. Solid Ice Phase Layering
+        if (uIce > 0.005) {
+          vec3 glacialBase = mix(
+            vec3(0.58, 0.84, 0.94),
+            vec3(0.76, 0.91, 0.98),
+            clamp(frostGrain * 0.8 + 0.2 * uDeepIce, 0.0, 1.0)
+          );
+          vec2 bubW = worley(vWorldPos.xz * 7.2 + vec2(4.2, -3.1));
+          float microBubbles = smoothstep(0.16, 0.04, bubW.x) * (0.4 + 0.6 * uDeepIce);
+
+          vec3 iceCol = mix(surfaceCol, glacialBase, uIce * (0.58 + 0.24 * frostGrain));
+          iceCol = mix(iceCol, vec3(0.18, 0.48, 0.66), clamp(iceCrackDeep * 0.65 * uIce, 0.0, 0.7));
+          float whiteFeatures = clamp(iceCrackSurface * 0.85 + microBubbles * 0.45, 0.0, 1.0);
+          iceCol = mix(iceCol, vec3(0.94, 0.99, 1.0), whiteFeatures * uIce);
+          surfaceCol = mix(surfaceCol, iceCol, uIce);
+        }
+
+        // 8. Aerated Micro-Foam
+        float boilBubble = 0.0;
+        if (uSteam > 0.01) {
+          vec2 bw1 = worley(vWorldPos.xz * 4.5 + vec2(uTime * 1.4, -uTime * 1.1));
+          vec2 bw2 = worley(vWorldPos.xz * 9.2 - vec2(uTime * 2.1, uTime * 1.8));
+          float ring1 = smoothstep(0.08, 0.015, abs(bw1.x - 0.24));
+          float ring2 = smoothstep(0.12, 0.02, bw2.x);
+          boilBubble = clamp(ring1 * 0.75 + ring2 * 0.55, 0.0, 1.0) * uSteam;
+        }
+        float foamTex = fbm(vWorldPos.xz * 9.5 + N.xz * 2.0 + uTime * 0.4);
+        float crestFoam = smoothstep(0.52, 0.98, vCrest * foamTex) * (1.0 - uIce) * 0.42;
+        float rippleFoam = vRippleEnergy * (0.45 + 0.55 * foamTex) * (1.0 - 0.8 * uIce);
+        float totalFoam = clamp(crestFoam + rippleFoam * 0.55 + boilBubble * 0.72, 0.0, 0.92) * distFade;
+        surfaceCol = mix(surfaceCol, vec3(0.92, 0.98, 0.99), totalFoam);
+
+        // 9. Horizon Atmospheric Aerial Perspective Blend
+        vec3 horizonSky = skyColor(normalize(vec3(vWorldPos.x - uCam.x, max(0.02, -V.y * 0.2), vWorldPos.z - uCam.z)), L);
+        float fogFactor = 1.0 - exp(-0.0018 * dist * dist);
+        surfaceCol = mix(surfaceCol, horizonSky, clamp(fogFactor, 0.0, 1.0));
+
+        fragColor = vec4(surfaceCol, 1.0);
+      }
+    `;
+
+    const VS_SEABED = /* glsl */`#version 300 es
+      precision highp float;
+      layout(location = 0) in vec2 aPos;
+      uniform mat4 uVP;
+      out vec3 vWorldPos;
+
+      void main() {
+        float r2 = dot(aPos, aPos);
+        float bedY = -1.65 - 0.012 * r2;
+        vWorldPos = vec3(aPos.x, bedY, aPos.y);
+        gl_Position = uVP * vec4(vWorldPos, 1.0);
+      }
+    `;
+
+    const FS_SEABED = /* glsl */`#version 300 es
+      precision highp float;
+      in vec3 vWorldPos;
+
+      uniform vec3 uCam;
+      uniform vec3 uSun;
+      uniform vec3 uDeep;
+      uniform float uTime;
+      uniform float uIce;
+      uniform float uSteam;
+      uniform float uWarm;
+      uniform float uDeepIce;
+
+      out vec4 fragColor;
+
+      ${NOISE}
+
+      void main() {
+        vec2 p = vWorldPos.xz;
+        float dist = length(p);
+
+        float sandRipple = sin(p.x * 3.6 + p.y * 1.4 + 1.8 * fbm(p * 0.85)) * 0.5 + 0.5;
+        float fineGrain = fbm(p * 4.2);
+        vec2 peb = worley(p * 2.8);
+        float pebbleMask = 1.0 - smoothstep(0.14, 0.28, peb.x);
+
+        vec3 sandLight = vec3(0.52, 0.78, 0.76);
+        vec3 sandShade = vec3(0.22, 0.50, 0.54);
+        vec3 albedo = mix(sandShade, sandLight, 0.55 * sandRipple + 0.45 * fineGrain);
+        albedo = mix(albedo, vec3(0.18, 0.42, 0.48), pebbleMask * 0.32);
+
+        vec3 L = normalize(uSun);
+        vec2 causticUV = p * 0.72 - L.xz / max(L.y, 0.25) * (-vWorldPos.y * 0.45);
+        float cTime = uTime * mix(1.0, 0.04, uIce) * (1.0 + 0.65 * uSteam);
+
+        float cR = web(causticUV + vec2(0.012, 0.0), cTime);
+        float cG = web(causticUV, cTime);
+        float cB = web(causticUV - vec2(0.012, 0.0), cTime);
+        vec3 caustics = vec3(cR * 0.95, cG * 1.08, cB * 1.15);
+
+        float causticVis = (1.0 - 0.78 * uIce) * (1.0 - 0.45 * uSteam) * exp(-0.035 * dist);
+        vec3 col = albedo + caustics * vec3(0.46, 0.78, 0.76) * causticVis;
+
+        float depthFade = 1.0 - exp(-0.0032 * dist * dist);
+        col = mix(col, uDeep, clamp(depthFade, 0.0, 1.0));
+
+        fragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const VS_SKY = /* glsl */`#version 300 es
+      precision highp float;
+      const vec2 POS[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+      out vec2 vUV;
+      void main() {
+        vUV = POS[gl_VertexID];
+        gl_Position = vec4(POS[gl_VertexID], 0.9999, 1.0);
+      }
+    `;
+
+    const FS_SKY = /* glsl */`#version 300 es
+      precision highp float;
+      in vec2 vUV;
+      uniform vec3 uCam, uSun, uCamR, uCamU, uCamF;
+      uniform float uTime, uTanF, uAspect;
+      out vec4 fragColor;
+
+      ${NOISE}
+
+      void main() {
+        vec3 rd = normalize(
+          uCamF +
+          vUV.x * uAspect * uTanF * uCamR +
+          vUV.y * uTanF * uCamU
+        );
+        vec3 col = skyColor(rd, normalize(uSun));
+        vec4 mtn = mountains(rd, normalize(uSun));
+        col = mix(col, mtn.rgb, mtn.a);
+        fragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const VS_STEAM = /* glsl */`#version 300 es
+      precision highp float;
+      layout(location = 0) in vec2 aCorner;
+      layout(location = 1) in vec4 aSeed;
+
+      uniform mat4 uVP;
+      uniform vec3 uCamR, uCamU;
+      uniform float uTime;
+
+      out vec2 vUV;
+      out float vAlpha;
+      out float vSeed;
+
+      ${NOISE}
+
+      void main() {
+        float life = fract(aSeed.z + uTime * (0.14 + 0.08 * aSeed.w));
+        float angle = aSeed.x * 6.2831853 + uTime * 0.12 * (aSeed.y - 0.5);
+        float radius = sqrt(aSeed.y) * 9.5;
+        vec2 swirl = vec2(cos(angle), sin(angle)) * radius;
+        swirl += 0.65 * vec2(
+          sin(uTime * 0.7 + aSeed.x * 12.0),
+          cos(uTime * 0.6 + aSeed.y * 12.0)
+        ) * life;
+
+        float y = -0.15 + life * 4.2;
+        float size = mix(0.65, 2.55, life) * (0.75 + 0.5 * aSeed.w);
+
+        vec3 worldPos = vec3(swirl.x, y, swirl.y)
+                      + (aCorner.x * uCamR + aCorner.y * uCamU) * size;
+
+        vUV = aCorner;
+        vAlpha = sin(life * 3.14159265) * (1.0 - smoothstep(0.65, 1.0, life));
+        vSeed = aSeed.x * 19.7 + aSeed.w * 7.3;
+        gl_Position = uVP * vec4(worldPos, 1.0);
+      }
+    `;
+
+    const FS_STEAM = /* glsl */`#version 300 es
+      precision highp float;
+      in vec2 vUV;
+      in float vAlpha;
+      in float vSeed;
+      uniform float uTime, uSteam;
+      out vec4 fragColor;
+
+      ${NOISE}
+
+      void main() {
+        float r2 = dot(vUV, vUV);
+        if (r2 > 1.0) discard;
+        float radial = pow(1.0 - r2, 1.85);
+        float wispy = fbm(vUV * 2.4 + vec2(vSeed, -uTime * 0.35));
+        float a = radial * smoothstep(0.22, 0.78, wispy) * vAlpha * uSteam * 0.34;
+        vec3 steamCol = mix(vec3(0.76, 0.90, 0.94), vec3(0.96, 0.99, 1.0), wispy);
+        fragColor = vec4(steamCol * a, a);
+      }
+    `;
+
+    const VS_SNOW = /* glsl */`#version 300 es
+      precision highp float;
+      layout(location = 0) in vec4 aSeed;
+      uniform mat4 uVP;
+      uniform float uTime, uSnow, uDPR;
+      out float vAlpha;
+
+      void main() {
+        float life = fract(aSeed.z + uTime * (0.09 + 0.05 * aSeed.w));
+        float x = (aSeed.x - 0.5) * 20.0 + sin(uTime * 0.8 + aSeed.y * 15.0) * 0.65;
+        float z = (aSeed.y - 0.5) * 20.0 + cos(uTime * 0.7 + aSeed.x * 15.0) * 0.65;
+        float y = 5.5 - life * 5.8;
+        vAlpha = sin(life * 3.14159265) * uSnow * (0.45 + 0.55 * aSeed.w);
+        gl_Position = uVP * vec4(x, y, z, 1.0);
+        gl_PointSize = (2.2 + 2.8 * aSeed.w) * uDPR;
+      }
+    `;
+
+    const FS_SNOW = /* glsl */`#version 300 es
+      precision highp float;
+      in float vAlpha;
+      out vec4 fragColor;
+      void main() {
+        vec2 c = gl_PointCoord * 2.0 - 1.0;
+        float r2 = dot(c, c);
+        if (r2 > 1.0) discard;
+        float a = (1.0 - r2) * vAlpha * 0.75;
+        fragColor = vec4(vec3(0.92, 0.97, 1.0) * a, a);
+      }
+    `;
+
+    const VS_POST = /* glsl */`#version 300 es
+      precision highp float;
+      const vec2 POS[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+      out vec2 vUV;
+      void main() {
+        vUV = POS[gl_VertexID] * 0.5 + 0.5;
+        gl_Position = vec4(POS[gl_VertexID], 0.0, 1.0);
+      }
+    `;
+
+    const FS_POST = /* glsl */`#version 300 es
+      precision highp float;
+      in vec2 vUV;
+      uniform sampler2D uTex;
+      uniform float uTime, uSteam, uIce, uSunVis, uHdr, uFlash, uAberr, uShake, uIdle;
+      uniform vec2 uSunUV, uShakeDir;
+      out vec4 fragColor;
+
+      ${NOISE}
+
+      vec3 acesFilm(vec3 x) {
+        const float a = 2.51;
+        const float b = 0.03;
+        const float c = 2.43;
+        const float d = 0.59;
+        const float e = 0.14;
+        return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+      }
+
+      void main() {
+        vec2 uv = vUV;
+
+        if (uSteam > 0.01) {
+          float heatWave = vnoise(uv * vec2(12.0, 18.0) + vec2(0.0, -uTime * 3.2)) - 0.5;
+          uv += vec2(heatWave * 0.0045 * uSteam, heatWave * 0.0025 * uSteam);
+        }
+
+        uv += uShakeDir * (uShake * 0.003);
+        uv = clamp(uv, vec2(0.001), vec2(0.999));
+
+        vec2 centerVec = uv - 0.5;
+        float ca = (uAberr * 0.004 + uSteam * 0.0012) * dot(centerVec, centerVec);
+        vec3 col = vec3(
+          texture(uTex, clamp(uv + centerVec * ca, 0.001, 0.999)).r,
+          texture(uTex, uv).g,
+          texture(uTex, clamp(uv - centerVec * ca, 0.001, 0.999)).b
+        );
+
+        if (uSunVis > 0.01) {
+          vec2 dSun = uv - uSunUV;
+          float sunDist = length(dSun);
+          float glare = exp(-4.5 * sunDist) * 0.18 + exp(-18.0 * sunDist) * 0.14;
+          col += vec3(1.0, 0.88, 0.68) * glare * uSunVis;
+        }
+
+        if (uIce > 0.01) {
+          float edgeDist = length((vUV - 0.5) * vec2(1.15, 1.0));
+          float frostPattern = fbm(vUV * 9.0);
+          float frostMask = smoothstep(0.52, 0.86, edgeDist + 0.16 * frostPattern) * uIce * 0.32;
+          col = mix(col, vec3(0.82, 0.95, 1.0), frostMask);
+        }
+
+        col = acesFilm(col * 1.04);
+        col = pow(col, vec3(1.0 / 2.2));
+
+        float vig = 1.0 - 0.18 * dot(centerVec, centerVec);
+        col *= vig;
+
+        fragColor = vec4(col, 1.0);
+      }
+    `;
+
+    // =========================================================================
+    // 6. WebGL2 Program Compiler & Geometry Builders
+    // =========================================================================
+    function compileShader(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        const log = gl.getShaderInfoLog(s);
+        throw new Error('Shader compile error: ' + log);
+      }
+      return s;
+    }
+
+    function createProg(vsSrc, fsSrc) {
+      const p = gl.createProgram();
+      gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vsSrc));
+      gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        throw new Error('Program link error: ' + gl.getProgramInfoLog(p));
+      }
+      const u = {};
+      const count = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+      for (let i = 0; i < count; i++) {
+        const info = gl.getActiveUniform(p, i);
+        const baseName = info.name.replace(/\[0\]$/, '');
+        u[baseName] = gl.getUniformLocation(p, baseName);
+        if (info.size > 1) {
+          for (let k = 0; k < info.size; k++) {
+            u[`${baseName}[${k}]`] = gl.getUniformLocation(p, `${baseName}[${k}]`);
+          }
+        }
+      }
+      return { prog: p, u };
+    }
+
+    const progWater = createProg(VS_WATER, FS_WATER);
+    const progSeabed = createProg(VS_SEABED, FS_SEABED);
+    const progSky = createProg(VS_SKY, FS_SKY);
+    const progSteam = createProg(VS_STEAM, FS_STEAM);
+    const progSnow = createProg(VS_SNOW, FS_SNOW);
+    const progPost = createProg(VS_POST, FS_POST);
+    const emptyVAO = gl.createVertexArray();
+
+    function buildGridVAO(N, radius) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+
+      const verts = new Float32Array((N + 1) * (N + 1) * 2);
+      let vp = 0;
+      for (let z = 0; z <= N; z++) {
+        const v = (z / N) * 2 - 1;
+        const sz = Math.sign(v) * Math.pow(Math.abs(v), 1.35) * radius;
+        for (let x = 0; x <= N; x++) {
+          const u = (x / N) * 2 - 1;
+          const sx = Math.sign(u) * Math.pow(Math.abs(u), 1.35) * radius;
+          verts[vp++] = sx;
+          verts[vp++] = sz;
+        }
+      }
+
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      const indices = new Uint32Array(N * N * 6);
+      let ip = 0;
+      const stride = N + 1;
+      for (let z = 0; z < N; z++) {
+        for (let x = 0; x < N; x++) {
+          const i0 = z * stride + x;
+          const i1 = i0 + 1;
+          const i2 = i0 + stride;
+          const i3 = i2 + 1;
+          indices[ip++] = i0;
+          indices[ip++] = i2;
+          indices[ip++] = i1;
+          indices[ip++] = i1;
+          indices[ip++] = i2;
+          indices[ip++] = i3;
+        }
+      }
+
+      const ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+      gl.bindVertexArray(null);
+
+      return { vao, count: indices.length };
+    }
+
+    // Smoke test contract: low quality pins waterVAO.count === 140 * 140 * 6
+    const WATER_GRID_N = LOW_QUALITY ? 140 : 220;
+    var waterVAO = buildGridVAO(WATER_GRID_N, 28.0);
+    const seabedVAO = buildGridVAO(LOW_QUALITY ? 64 : 96, 30.0);
+
+    // Steam Instanced Billboards VAO
+    const steamVAO = (() => {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const quad = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+      const bQuad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, bQuad);
+      gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      const count = LOW_QUALITY ? 70 : 130;
+      const seeds = new Float32Array(count * 4);
+      for (let i = 0; i < count * 4; i++) {
+        seeds[i] = ((Math.sin(i * 91.7 + 13.1) * 43758.5453) % 1 + 1) % 1;
+      }
+      const bSeed = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, bSeed);
+      gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(1, 1);
+      gl.bindVertexArray(null);
+      return { vao, count };
+    })();
+
+    // Snow Particles VAO
+    const snowVAO = (() => {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const count = LOW_QUALITY ? 120 : 240;
+      const seeds = new Float32Array(count * 4);
+      for (let i = 0; i < count * 4; i++) {
+        seeds[i] = ((Math.sin(i * 47.3 + 7.9) * 29381.137) % 1 + 1) % 1;
+      }
+      const b = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      return { vao, count };
+    })();
+
+    // =========================================================================
+    // 7. Offscreen Framebuffers (Refraction FBO + Post-Process Scene FBO)
+    // =========================================================================
+    var resAdj = LOW_QUALITY ? 0.7 : 1.0;
+    let fboScene = null;
+    let fboRefract = null;
+    let dpr = 1;
+
+    function destroyFBO(f) {
+      if (!f) return;
+      gl.deleteFramebuffer(f.fbo);
+      gl.deleteTexture(f.tex);
+      gl.deleteRenderbuffer(f.depth);
+    }
+
+    function makeFBO(w, h) {
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      const internalFormat = useHDR ? gl.RGBA16F : gl.RGBA8;
+      const type = useHDR ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, w, h, 0, gl.RGBA, type, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+      const depth = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { fbo, tex, depth, w, h };
+    }
+
+    function resize() {
+      dpr = clamp(window.devicePixelRatio || 1, 1, LOW_QUALITY ? 1.5 : 2.0);
+      const w = Math.max(2, Math.floor(window.innerWidth * dpr * resAdj));
+      const h = Math.max(2, Math.floor(window.innerHeight * dpr * resAdj));
+      if (canvas.width !== w || canvas.height !== h || !fboScene || !fboRefract) {
+        canvas.width = w;
+        canvas.height = h;
+        destroyFBO(fboScene);
+        destroyFBO(fboRefract);
+        fboScene = makeFBO(w, h);
+        fboRefract = makeFBO(w, h);
+      }
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Update quality label and allow live quality switching
+    function syncQualityUI() {
+      qualityLabel.textContent = '画质: ' + (LOW_QUALITY ? '轻量' : '高');
+      btnQuality.classList.toggle('active', !LOW_QUALITY);
+    }
+    syncQualityUI();
+
+    btnQuality.addEventListener('click', () => {
+      LOW_QUALITY = !LOW_QUALITY;
+      qualityMode = LOW_QUALITY ? 'low' : 'high';
+      resAdj = LOW_QUALITY ? 0.7 : 1.0;
+      waterVAO = buildGridVAO(LOW_QUALITY ? 140 : 220, 28.0);
+      syncQualityUI();
+      resize();
+    });
+
+    btnSunCycle.addEventListener('click', () => {
+      sunPresetIdx = (sunPresetIdx + 1) % SUN_PRESETS.length;
+      targetSunDir = normalize3(SUN_PRESETS[sunPresetIdx].dir.slice());
+      sunLabel.textContent = SUN_PRESETS[sunPresetIdx].name;
+    });
+
+    // =========================================================================
+    // 8. Interactive Ripple Ring Buffer & Camera Orbit Physics
+    // =========================================================================
+    const MAX_RIPPLES = 24;
+    const ripples = new Float32Array(MAX_RIPPLES * 4);
+    var rippleHead = 0;
+    let simTime = 0;
+
+    function pushRipple(x, z, strength = 0.65) {
+      const idx = (rippleHead % MAX_RIPPLES) * 4;
+      ripples[idx] = clamp(x, -16, 16);
+      ripples[idx + 1] = clamp(z, -16, 16);
+      ripples[idx + 2] = simTime;
+      ripples[idx + 3] = strength;
+      rippleHead++;
+    }
+
+    btnDropRipple.addEventListener('click', () => {
+      const rx = (Math.random() - 0.5) * 3.2;
+      const rz = (Math.random() - 0.5) * 3.2;
+      pushRipple(rx, rz, 0.78);
+    });
+
+    // Camera state
+    let yaw = 0.0, pitch = 0.36, dist = 8.4;
+    let targetYaw = 0.0, targetPitch = 0.36, targetDist = 8.4;
+    let camPos = [0, 3.2, 7.8];
+    let camR = [1, 0, 0], camU = [0, 1, 0], camF = [0, 0, -1];
+    let vpMat = new Float32Array(16);
+
+    function cross3(a, b) {
+      return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      ];
+    }
+
+    function mulMat4(a, b, out) {
+      for (let i = 0; i < 4; i++) {
+        const ai0 = a[i], ai1 = a[i + 4], ai2 = a[i + 8], ai3 = a[i + 12];
+        out[i]      = ai0 * b[0]  + ai1 * b[1]  + ai2 * b[2]  + ai3 * b[3];
+        out[i + 4]  = ai0 * b[4]  + ai1 * b[5]  + ai2 * b[6]  + ai3 * b[7];
+        out[i + 8]  = ai0 * b[8]  + ai1 * b[9]  + ai2 * b[10] + ai3 * b[11];
+        out[i + 12] = ai0 * b[12] + ai1 * b[13] + ai2 * b[14] + ai3 * b[15];
+      }
+    }
+
+    const fov = (50 * Math.PI) / 180;
+    const tanHalfFov = Math.tan(fov * 0.5);
+
+    function updateCamera(aspect) {
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const target = [0, -0.18, 0];
+      camPos[0] = target[0] + dist * cp * sy;
+      camPos[1] = target[1] + dist * sp;
+      camPos[2] = target[2] + dist * cp * cy;
+
+      camF = normalize3([target[0] - camPos[0], target[1] - camPos[1], target[2] - camPos[2]]);
+      camR = normalize3(cross3(camF, [0, 1, 0]));
+      camU = cross3(camR, camF);
+
+      const view = [
+        camR[0], camU[0], -camF[0], 0,
+        camR[1], camU[1], -camF[1], 0,
+        camR[2], camU[2], -camF[2], 0,
+        -(camR[0] * camPos[0] + camR[1] * camPos[1] + camR[2] * camPos[2]),
+        -(camU[0] * camPos[0] + camU[1] * camPos[1] + camU[2] * camPos[2]),
+         (camF[0] * camPos[0] + camF[1] * camPos[1] + camF[2] * camPos[2]),
+        1
+      ];
+
+      const f = 1.0 / tanHalfFov;
+      const near = 0.2, far = 90.0;
+      const nf = 1.0 / (near - far);
+      const proj = [
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, (2 * far * near) * nf, 0
+      ];
+
+      mulMat4(proj, view, vpMat);
+    }
+
+    function screenToWaterPlane(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = 1 - ((clientY - rect.top) / rect.height) * 2;
+      const aspect = rect.width / Math.max(1, rect.height);
+
+      const rx = camF[0] + nx * aspect * tanHalfFov * camR[0] + ny * tanHalfFov * camU[0];
+      const ry = camF[1] + nx * aspect * tanHalfFov * camR[1] + ny * tanHalfFov * camU[1];
+      const rz = camF[2] + nx * aspect * tanHalfFov * camR[2] + ny * tanHalfFov * camU[2];
+
+      if (ry >= -0.01) return null;
+      const t = -camPos[1] / ry;
+      if (t <= 0 || t > 45) return null;
+      return [camPos[0] + rx * t, camPos[2] + rz * t];
+    }
+
+    // Pointer Interaction (Orbit Drag vs Click/Hover Ripple)
+    let pointerDown = false;
+    let pointerMoved = false;
+    let downX = 0, downY = 0;
+    let lastX = 0, lastY = 0;
+    let lastTrailTime = 0;
+
+    canvas.addEventListener('pointerdown', e => {
+      if (e.button !== undefined && e.button !== 0) return;
+      pointerDown = true;
+      pointerMoved = false;
+      downX = lastX = e.clientX;
+      downY = lastY = e.clientY;
+      canvas.setPointerCapture?.(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      if (!pointerDown) {
+        if (simTime - lastTrailTime > 0.09 && curTemp > -2) {
+          const hit = screenToWaterPlane(e.clientX, e.clientY);
+          if (hit) {
+            pushRipple(hit[0], hit[1], 0.22);
+            lastTrailTime = simTime;
+          }
+        }
+        return;
+      }
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5) {
+        pointerMoved = true;
+      }
+      if (pointerMoved) {
+        targetYaw -= dx * 0.0055;
+        targetPitch = clamp(targetPitch + dy * 0.0045, 0.14, 1.18);
+      }
+    });
+
+    function endPointer(e) {
+      if (!pointerDown) return;
+      pointerDown = false;
+      if (!pointerMoved) {
+        const hit = screenToWaterPlane(e.clientX, e.clientY);
+        if (hit) pushRipple(hit[0], hit[1], 0.72);
+      }
+    }
+
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', () => { pointerDown = false; });
+
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      targetDist = clamp(targetDist + e.deltaY * 0.006, 4.2, 16.5);
+    }, { passive: false });
+
+    // UI Visibility Toggle (H Key & Toolbar Button)
+    let uiHidden = params.get('ui') === '0';
+
+    function applyUIVisibility() {
+      for (const el of [$('#title'), $('#hint'), $('#panel'), centerHintPill]) {
+        if (!el) continue;
+        el.classList.toggle('ui-off', uiHidden);
+        if (uiHidden) el.setAttribute('inert', '');
+        else el.removeAttribute('inert');
+      }
+      uiRestoreBtn.classList.toggle('visible', uiHidden);
+    }
+    applyUIVisibility();
+
+    function toggleUI() {
+      uiHidden = !uiHidden;
+      applyUIVisibility();
+    }
+
+    btnToggleUI.addEventListener('click', toggleUI);
+    uiRestoreBtn.addEventListener('click', toggleUI);
+
+    window.addEventListener('keydown', e => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      if (e.key === 'h' || e.key === 'H') {
+        toggleUI();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        pushRipple(0, 0, 0.75);
+      }
+    });
+
+    // =========================================================================
+    // 9. Main Multi-Pass WebGL2 Render Loop
+    // =========================================================================
+    let lastTime = performance.now();
+    let fpsFrames = 0, fpsClock = lastTime;
+
+    function renderFrame(now) {
+      requestAnimationFrame(renderFrame);
+      if (window.__suspendRendering) return;
+
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) * 0.001));
+      lastTime = now;
+
+      if (!reducedMotion) {
+        simTime += dt;
+      }
+
+      const tempRate = reducedMotion ? 1.0 : (1.0 - Math.exp(-dt * 4.8));
+      curTemp += (targetTemp - curTemp) * tempRate;
+      dispTemp += (curTemp - dispTemp) * (1.0 - Math.exp(-dt * 10.0));
+      updateTelemetryHUD(dispTemp);
+
+      for (let i = 0; i < 3; i++) {
+        sunDir[i] += (targetSunDir[i] - sunDir[i]) * (1.0 - Math.exp(-dt * 5.0));
+      }
+      sunDir = normalize3(sunDir);
+
+      const camLerp = 1.0 - Math.exp(-dt * 9.0);
+      const idleDrift = (!pointerDown && !reducedMotion) ? Math.sin(simTime * 0.28) * 0.0004 : 0;
+      yaw += (targetYaw - yaw) * camLerp + idleDrift;
+      pitch += (targetPitch - pitch) * camLerp;
+      dist += (targetDist - dist) * camLerp;
+
+      const w = canvas.width, h = canvas.height;
+      const aspect = w / Math.max(1, h);
+      updateCamera(aspect);
+
+      const uIce = ssj(2.0, -12.0, curTemp);
+      const uDeepIce = ssj(-8.0, -28.0, curTemp);
+      const uWarm = ssj(10.0, 95.0, curTemp);
+      const uSteam = ssj(92.0, 145.0, curTemp);
+      const uSnow = ssj(1.0, -14.0, curTemp);
+      const uWaveAmp = Math.max(0.02, (1.0 - 0.94 * uIce - 0.04 * uDeepIce) * (1.0 - 0.14 * uSteam));
+
+      const waterCol = [
+        mix(0.06, 0.12, uWarm),
+        mix(0.54, 0.64, uWarm),
+        mix(0.58, 0.56, uWarm)
+      ];
+      const deepCol = [
+        mix(0.018, 0.032, uWarm),
+        mix(0.16, 0.22, uWarm),
+        mix(0.24, 0.27, uWarm)
+      ];
+
+      // -----------------------------------------------------------------------
+      // PASS 1: Offscreen Refraction FBO (Sky + Seabed with Caustics)
+      // -----------------------------------------------------------------------
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fboRefract.fbo);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.DEPTH_TEST);
+
+      gl.useProgram(progSky.prog);
+      gl.bindVertexArray(emptyVAO);
+      gl.uniform3fv(progSky.u.uCam, camPos);
+      gl.uniform3fv(progSky.u.uSun, sunDir);
+      gl.uniform3fv(progSky.u.uCamR, camR);
+      gl.uniform3fv(progSky.u.uCamU, camU);
+      gl.uniform3fv(progSky.u.uCamF, camF);
+      gl.uniform1f(progSky.u.uTime, simTime);
+      gl.uniform1f(progSky.u.uTanF, tanHalfFov);
+      gl.uniform1f(progSky.u.uAspect, aspect);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+
+      gl.useProgram(progSeabed.prog);
+      gl.bindVertexArray(seabedVAO.vao);
+      gl.uniformMatrix4fv(progSeabed.u.uVP, false, vpMat);
+      gl.uniform3fv(progSeabed.u.uCam, camPos);
+      gl.uniform3fv(progSeabed.u.uSun, sunDir);
+      gl.uniform3fv(progSeabed.u.uDeep, deepCol);
+      gl.uniform1f(progSeabed.u.uTime, simTime);
+      gl.uniform1f(progSeabed.u.uIce, uIce);
+      gl.uniform1f(progSeabed.u.uSteam, uSteam);
+      gl.uniform1f(progSeabed.u.uWarm, uWarm);
+      gl.uniform1f(progSeabed.u.uDeepIce, uDeepIce);
+      gl.drawElements(gl.TRIANGLES, seabedVAO.count, gl.UNSIGNED_INT, 0);
+
+      // -----------------------------------------------------------------------
+      // PASS 2: Main Scene FBO (Sky + Water Surface + Steam & Snow Particles)
+      // -----------------------------------------------------------------------
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fboScene.fbo);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.DEPTH_TEST);
+
+      gl.useProgram(progSky.prog);
+      gl.bindVertexArray(emptyVAO);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+
+      gl.useProgram(progWater.prog);
+      gl.bindVertexArray(waterVAO.vao);
+      gl.uniformMatrix4fv(progWater.u.uVP, false, vpMat);
+      gl.uniform1f(progWater.u.uTime, simTime);
+      gl.uniform1f(progWater.u.uWaveAmp, uWaveAmp);
+      gl.uniform1f(progWater.u.uSteam, uSteam);
+      gl.uniform1f(progWater.u.uIce, uIce);
+      gl.uniform1f(progWater.u.uDeepIce, uDeepIce);
+      gl.uniform1f(progWater.u.uWarm, uWarm);
+      gl.uniform3fv(progWater.u.uCam, camPos);
+      gl.uniform3fv(progWater.u.uSun, sunDir);
+      gl.uniform3fv(progWater.u.uWaterCol, waterCol);
+      gl.uniform3fv(progWater.u.uDeep, deepCol);
+      gl.uniform2f(progWater.u.uInvRes, 1.0 / w, 1.0 / h);
+      gl.uniform4fv(progWater.u.uRipple, ripples);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fboRefract.tex);
+      gl.uniform1i(progWater.u.uRefractTex, 0);
+
+      gl.drawElements(gl.TRIANGLES, waterVAO.count, gl.UNSIGNED_INT, 0);
+
+      // Volumetric Particles (Premultiplied Alpha)
+      if (uSteam > 0.01 || uSnow > 0.01) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+
+        if (uSteam > 0.01) {
+          gl.useProgram(progSteam.prog);
+          gl.bindVertexArray(steamVAO.vao);
+          gl.uniformMatrix4fv(progSteam.u.uVP, false, vpMat);
+          gl.uniform3fv(progSteam.u.uCamR, camR);
+          gl.uniform3fv(progSteam.u.uCamU, camU);
+          gl.uniform1f(progSteam.u.uTime, simTime);
+          gl.uniform1f(progSteam.u.uSteam, uSteam);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, steamVAO.count);
+        }
+
+        if (uSnow > 0.01) {
+          gl.useProgram(progSnow.prog);
+          gl.bindVertexArray(snowVAO.vao);
+          gl.uniformMatrix4fv(progSnow.u.uVP, false, vpMat);
+          gl.uniform1f(progSnow.u.uTime, simTime);
+          gl.uniform1f(progSnow.u.uSnow, uSnow);
+          gl.uniform1f(progSnow.u.uDPR, dpr);
+          gl.drawArrays(gl.POINTS, 0, snowVAO.count);
+        }
+
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+      }
+
+      // -----------------------------------------------------------------------
+      // PASS 3: Post-Processing to Default Canvas Framebuffer
+      // -----------------------------------------------------------------------
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.DEPTH_TEST);
+
+      const sDotF = sunDir[0] * camF[0] + sunDir[1] * camF[1] + sunDir[2] * camF[2];
+      const sDotR = sunDir[0] * camR[0] + sunDir[1] * camR[1] + sunDir[2] * camR[2];
+      const sDotU = sunDir[0] * camU[0] + sunDir[1] * camU[1] + sunDir[2] * camU[2];
+      const sunVis = clamp((sDotF - 0.15) / 0.85, 0.0, 1.0);
+      const sunUVx = 0.5 + 0.5 * (sDotR / (Math.max(0.1, sDotF) * aspect * tanHalfFov));
+      const sunUVy = 0.5 + 0.5 * (sDotU / (Math.max(0.1, sDotF) * tanHalfFov));
+
+      gl.useProgram(progPost.prog);
+      gl.bindVertexArray(emptyVAO);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fboScene.tex);
+      gl.uniform1i(progPost.u.uTex, 0);
+      gl.uniform1f(progPost.u.uTime, simTime);
+      gl.uniform1f(progPost.u.uSteam, uSteam);
+      gl.uniform1f(progPost.u.uIce, uIce);
+      gl.uniform1f(progPost.u.uSunVis, sunVis);
+      gl.uniform1f(progPost.u.uHdr, useHDR ? 1.0 : 0.0);
+      gl.uniform1f(progPost.u.uFlash, 0.0);
+      gl.uniform1f(progPost.u.uAberr, 0.0);
+      gl.uniform1f(progPost.u.uShake, 0.0);
+      gl.uniform1f(progPost.u.uIdle, 0.0);
+      gl.uniform2f(progPost.u.uSunUV, sunUVx, sunUVy);
+      gl.uniform2f(progPost.u.uShakeDir, 1.0, 0.0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      window.__frames++;
+      window.__renderCount++;
+
+      if (DEBUG) {
+        fpsFrames++;
+        if (now - fpsClock >= 500) {
+          const fps = Math.round((fpsFrames * 1000) / (now - fpsClock));
+          $('#fps').textContent = `${fps} FPS · ${w}×${h} · ${qualityMode}`;
+          fpsFrames = 0;
+          fpsClock = now;
+        }
+      }
+    }
+
+    requestAnimationFrame(renderFrame);
+  </script>
 </body>
 </html>
