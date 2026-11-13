@@ -2321,16 +2321,24 @@
     // UI Visibility Toggle (H Key & Toolbar Button)
     let uiHidden = params.get('ui') === '0';
 
-    function applyUIVisibility() {
-      for (const el of [$('#title'), $('#hint'), $('#panel'), centerHintPill]) {
+    function applyUIVisibility(immediate = false) {
+      const els = [$('#title'), $('#hint'), $('#panel'), centerHintPill];
+      for (const el of els) {
         if (!el) continue;
+        if (immediate) el.style.transition = 'none';
         el.classList.toggle('ui-off', uiHidden);
         if (uiHidden) el.setAttribute('inert', '');
         else el.removeAttribute('inert');
       }
+      if (immediate) {
+        void document.body.offsetHeight;
+        for (const el of els) {
+          if (el) el.style.transition = '';
+        }
+      }
       uiRestoreBtn.classList.toggle('visible', uiHidden);
     }
-    applyUIVisibility();
+    applyUIVisibility(true);
 
     function toggleUI() {
       uiHidden = !uiHidden;
